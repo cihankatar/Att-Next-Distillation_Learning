@@ -1,0 +1,45 @@
+pytorch              
+torchaudio             
+torchvision==0.16.2              
+numpy==1.26.4
+tqdm
+glob2 
+pillow 
+scikitlearn
+pyyaml
+timm
+matplotlib
+wandb
+torchtopological
+ptflops
+scipy==1.11.4
+
+#conda create --name=seg --override-channels --channel=pytorch --channel=nvidia --channel=conda-forge pytorch torchvision torchaudio cudatoolkit tqdm scikit-learn glob2 pillow matplotlib einops timm wandb pip
+#if use torch iwith pip handle torch.sixt_ module
+#pip install gudhi
+#pip install pot 
+#pip install giotto-ph
+
+# appdirs==1.4.4
+# click==8.1.7
+# dockerpycreds==0.4.0
+# fsspec==2023.12.2
+# giottoph==0.2.4
+# gitdb==4.0.11
+# gitpython==3.1.43
+# gudhi==3.10.1
+# huggingfacehub==0.19.4
+# opencvpython==4.10.0.84
+# pot==0.8.2
+# protobuf==4.25.3
+# psutil==5.9.8
+# pyyaml==6.0.1
+# safetensors==0.4.1
+# scipy==1.11.4
+# sentrysdk==1.44.1
+# separableconvtorch==0.1.0
+# setproctitle==1.3.3
+# smmap==5.0.1
+# timm==0.9.12
+# torchtopological==0.1.7
+# wandb==0.16.6
