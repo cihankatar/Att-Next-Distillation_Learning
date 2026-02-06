@@ -121,6 +121,7 @@ def main():
 
     config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data)
     args.suffle         = False
+    print("train_im_path", os.environ["ML_DATA_ROOT"]+"train/images") 
 
     # Data Loaders
     def create_loader(operation):
