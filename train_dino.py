@@ -218,7 +218,6 @@ def main():
                 loss = loss_fn(student_proj, teacher_proj, teacher_temp)
                 #loss = loss_c * weigt + seg_loss
 
-
                 if training:
                     optimizer.zero_grad()
                     loss.backward()
