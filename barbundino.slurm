@@ -16,5 +16,5 @@
 module load miniconda3
 conda activate segmentation
 cd /arf/home/ckatar/Desktop/Repo/Att-Next-Distillation_Learning
-git commit --amend
+git pull origin main
 python train_dino.py
