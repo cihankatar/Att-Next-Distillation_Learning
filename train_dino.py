@@ -125,8 +125,7 @@ def main():
 
     # Data Loaders
     def create_loader(operation):
-        args.suffle         = False
-        args.workers = 1
+
         return loader(operation,args.mode, args.sslmode_modelname, args.bsize, args.workers,
                       args.imsize, args.cutoutpr, args.cutoutbox, args.shuffle, args.sratio, data)
 
@@ -187,26 +186,19 @@ def main():
         current_lr = optimizer.param_groups[0]['lr']
         print("teacher temp", teacher_temp, "\n")
         print("current_lr", current_lr, "\n")
-        start_time = time.time()
         with torch.set_grad_enabled(training):
             for img,student_augs, teacher_augs, pseudo_masks in loader:
                 end_time = time.time()
-                print(end_time-start_time," data loading time \n")
 
-                start_time = time.time()
                 student_feats = [student(im.to(device))[3] for im in student_augs]
                 student_pool  = [feat.mean(dim=(2, 3)) for feat in student_feats]
                 student_proj  = [F.normalize(student_head(p), dim=1) for p in student_pool]
-                end_time = time.time()
-                print(end_time-start_time," student forward time \n")
-                start_time = time.time()
+
                 with torch.no_grad():
 
                     teacher_feats = [teacher(im.to(device))[3] for im in teacher_augs]
                     teacher_pool  = [feat.mean(dim=(2, 3)) for feat in teacher_feats]
                     teacher_proj  = [F.normalize(teacher_head(p), dim=1) for p in teacher_pool]
-                end_time = time.time()
-                print(end_time-start_time," teacher forward time \n")
 
                 seg_feats  = student_feats[0]
                 seg_logits = s_head(seg_feats)              # Shape: [B, 512, 8, 8]
@@ -221,28 +213,20 @@ def main():
                 # seg_target = F.interpolate(seg_target, size=seg_logits.shape[-2:], mode='bilinear', align_corners=False)
 
                 # Compute segmentation loss
-                start_time = time.time()
-                seg_loss = F.binary_cross_entropy_with_logits(seg_logits, seg_target)
-                loss_c = loss_fn(student_proj, teacher_proj, teacher_temp)
-                loss = loss_c * weigt + seg_loss
-                end_time = time.time()
-                print(end_time-start_time," loss computation time \n")
 
-                end_time = time.time()
+                #seg_loss = F.binary_cross_entropy_with_logits(seg_logits, seg_target)
+                loss = loss_fn(student_proj, teacher_proj, teacher_temp)
+                #loss = loss_c * weigt + seg_loss
 
-                start_time = time.time()
+
                 if training:
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
-                end_time = time.time()  
-                print(end_time-start_time," backward time \n")
-                start_time = time.time()
+
                 update_teacher(student, teacher, momentum)
                 update_teacher(student_head, teacher_head, momentum)
                 update_teacher(s_head, t_head, momentum)
-                end_time = time.time()
-                print(end_time-start_time," teacher update time \n")
                 
                 epoch_loss += loss.item()
                 epoch_seg_loss += seg_loss.item()
@@ -267,13 +251,14 @@ def main():
                         student_map = student_feats[v_idx][b_idx].mean(dim=0).detach().cpu()
                         teacher_map = teacher_feats[v_idx][b_idx].mean(dim=0).detach().cpu()
 
-                        pseudo_mask   = seg_target[b_idx][0].detach().cpu()
-                        seg_logit    = seg_logits[b_idx][0].detach().cpu()
+                        pseudo_mask  = seg_target[b_idx].permute(1,2,0).detach().cpu().numpy()
+                        seg_logit    = seg_logits[b_idx].permute(1,2,0).detach().cpu().numpy() 
                         student_heatmap = featuremap_to_heatmap(student_map)
                         teacher_heatmap = featuremap_to_heatmap(teacher_map)
-                        student_aug  = student_augs[v_idx][b_idx].permute(1,2,0).detach().cpu() 
-                        teacher_aug  = teacher_augs[v_idx][b_idx].permute(1,2,0).detach().cpu()   
-                        im=img[b_idx].permute(1,2,0).detach().cpu() 
+                        student_aug  = student_augs[v_idx][b_idx].permute(1,2,0).detach().cpu().numpy()
+                        teacher_aug  = teacher_augs[v_idx][b_idx].permute(1,2,0).detach().cpu().numpy()   
+                        im           = img[b_idx].permute(1,2,0).detach().cpu() 
+
                         wandb.log({
                             "Val Sample - Student Aug": wandb.Image(student_aug),
                             "Val Sample - Teacher Aug": wandb.Image(teacher_aug),
