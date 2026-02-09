@@ -215,8 +215,8 @@ def main():
                 # Compute segmentation loss
 
                 seg_loss = F.binary_cross_entropy_with_logits(seg_logits, seg_target)
-                loss = loss_fn(student_proj, teacher_proj, teacher_temp)
-                #loss = loss_c * weigt + seg_loss
+                loss_c = loss_fn(student_proj, teacher_proj, teacher_temp)
+                loss = loss_c * weigt + seg_loss
 
                 if training:
                     optimizer.zero_grad()
