@@ -138,13 +138,13 @@ def data_transform():
     return DinoGaborMultiCropTransform(
         crop_transform_global, color_transform_global,
         crop_transform_local, color_transform_local,
-        n_global=2, n_local=4
+        n_global=1, n_local=1
     )
 
 class DinoGaborMultiCropTransform:
     def __init__(self, crop_transform_global, color_transform_global,
                  crop_transform_local, color_transform_local,
-                 n_global=2, n_local=4):
+                 n_global=1, n_local=1):
         
         self.crop_global = crop_transform_global
         self.color_global = color_transform_global
