@@ -18,6 +18,33 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 
+
+def compute_batch_iou(pred_logits, target_masks):
+    """
+    Batch bazında ortalama IoU hesaplar.
+    pred_logits: [B, 1, H, W]
+    target_masks: [B, 1, H, W] (0 veya 1 değerleri)
+    """
+    # Sigmoid ve Threshold ile Binary Maske
+    probs = torch.sigmoid(pred_logits)
+    preds = (probs > 0.5).float()
+    
+    # Target maskeleri binary olduğundan emin olalım
+    targets = (target_masks > 0.5).float()
+    
+    # Kesişim ve Birleşim (Batch boyunca topla değil, her örnek için ayrı hesapla sonra ortala)
+    # Düzleştirelim: [B, -1]
+    preds_flat = preds.view(preds.size(0), -1)
+    targets_flat = targets.view(targets.size(0), -1)
+    
+    intersection = (preds_flat * targets_flat).sum(dim=1)  # [B]
+    union = (preds_flat + targets_flat).sum(dim=1) - intersection # [B]
+    
+    # Sıfıra bölünmeyi engelle (smooth)
+    iou = (intersection + 1e-6) / (union + 1e-6)
+    
+    return iou.mean().item() # Batch ortalaması
+
 def featuremap_to_heatmap(tensor):
     """Convert a 2D tensor to a colored heatmap suitable for wandb.Image."""
     heatmap = tensor.detach().cpu()
@@ -134,7 +161,7 @@ def main():
     def run_epoch(loader, epoch_idx, momentum, training=True):
         epoch_loss  = 0.0
         num_batches = 0
-        epoch_val_loss, epoch_seg_loss,epoch_monitor_loss = 0.0, 0.0, 0.0
+        epoch_val_loss, epoch_seg_loss,epoch_monitor_loss, epoch_iou = 0.0, 0.0, 0.0, 0.0
         weigt       = 0.1
 
         if training:
@@ -199,6 +226,9 @@ def main():
                     epoch_loss += loss.item()
                     epoch_monitor_loss += monitor_loss.item()
 
+                    iou = compute_batch_iou(seg_logits, real_seg_target)
+                    epoch_iou += iou
+
                     update_teacher(student, teacher, momentum)
                     update_teacher(student_head, teacher_head, momentum)
 
@@ -233,7 +263,6 @@ def main():
 
                         prob = torch.sigmoid(seg_logits[b_idx])
                         pred_mask = (prob > 0.5).float().permute(1,2,0).detach().cpu().numpy() 
-                        "calculate IoU for the predicted mask and the real mask"
 
                         # IoU calculation
                         intersection = (pred_mask * cropped_real_mask).sum()
@@ -260,7 +289,7 @@ def main():
                 num_batches += 1
 
         if not training:
-            return epoch_val_loss / len(loader)
+            return epoch_val_loss / len(loader), epoch_iou / len(loader)
 
         return epoch_loss / len(loader), epoch_seg_loss / len(loader), epoch_monitor_loss / len(loader)
 
@@ -270,11 +299,14 @@ def main():
         # Training
         current_momentum = get_teacher_momentum(epoch, config['epochs'])
         train_loss,seg_loss,monitor_loss = run_epoch(train_loader, epoch_idx, current_momentum,training=True )
-        wandb.log({"Train Loss": train_loss, "seg_loss": seg_loss, "monitor_loss": monitor_loss})
+        wandb.log({"Train Loss": train_loss,
+                    "seg_loss": seg_loss, 
+                    "monitor_loss": monitor_loss})
         scheduler.step()
 
-        cos_sim = run_epoch(val_loader, epoch_idx,current_momentum,training=False)
-        wandb.log({"Cosine Similarity": cos_sim })
+        cos_sim,val_iou = run_epoch(val_loader, epoch_idx,current_momentum,training=False)
+        wandb.log({"Cosine Similarity": cos_sim, 
+                   "Validation IoU": val_iou })
 
         epoch_idx+=1
 
