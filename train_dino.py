@@ -158,11 +158,10 @@ def main():
 
     # Training and Validation Loops
 
-    def run_epoch(loader, epoch_idx, momentum, training=True):
+    def run_epoch(loader, epoch_idx, momentum, weigt,training=True):
         epoch_loss  = 0.0
         num_batches = 0
         epoch_val_loss, epoch_seg_loss,epoch_monitor_loss, epoch_iou = 0.0, 0.0, 0.0, 0.0
-        weigt       = 0.1
 
         if training:
             student.train()
@@ -214,7 +213,7 @@ def main():
                         loss.backward()
                         optimizer.step()
                         epoch_seg_loss += 0.0
-                        
+
                     detached_features  = [f.detach() for f in student_feats]
                     seg_monitor        = monitor_head(detached_features[0])   
                     monitor_loss       = F.binary_cross_entropy_with_logits(seg_monitor, real_seg_target.type_as(seg_monitor))
@@ -298,14 +297,15 @@ def main():
     for epoch in trange(config['epochs'], desc="Epochs"):
 
         # Training
+        weight = 0.1 
         current_momentum = get_teacher_momentum(epoch, config['epochs'])
-        train_loss,seg_loss,monitor_loss = run_epoch(train_loader, epoch_idx, current_momentum,training=True )
+        train_loss,seg_loss,monitor_loss = run_epoch(train_loader, epoch_idx, current_momentum,weight,training=True )
         wandb.log({"Train Loss": train_loss,
                     "seg_loss": seg_loss, 
                     "monitor_loss": monitor_loss})
         scheduler.step()
 
-        cos_sim,val_iou = run_epoch(val_loader, epoch_idx,current_momentum,training=False)
+        cos_sim,val_iou = run_epoch(val_loader, epoch_idx,current_momentum,weight,training=False)
         wandb.log({"Cosine Similarity": cos_sim, 
                    "Validation IoU": val_iou })
 
@@ -314,7 +314,7 @@ def main():
         print("epoch_idx",epoch_idx,"\n")
         
         # Print losses and validation metrics
-        print(f"Train Loss: {train_loss:.4f}, Segmentation Loss : {seg_loss:.4f}, Dino Loss: {train_loss-seg_loss-monitor_loss:.4f}, Monitor Loss : {monitor_loss:.4f}")
+        print(f"Train Loss: {train_loss:.4f}, Segmentation Loss : {seg_loss:.4f}, Dino Loss: {(train_loss-seg_loss)*(1/weight):.4f}, Monitor Loss : {monitor_loss:.4f}")
         print(f"Validation Cosine Similarity: {cos_sim:.4f}")
         print(f"Validation IoU: {val_iou:.4f}")
 
