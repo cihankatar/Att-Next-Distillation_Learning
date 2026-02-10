@@ -225,7 +225,7 @@ def main():
                         teacher_aug  = teacher_augs[v_idx][b_idx].permute(1,2,0).detach().cpu().numpy() 
 
                         im                    = img[b_idx].permute(1,2,0).detach().cpu().numpy()
-                        cropped_real_mask     = cropped_real_mask[b_idx].permute(1,2,0).detach().cpu().numpy()
+                        cropped_real_mask     = cropped_real_mask[v_idx][b_idx].permute(1,2,0).detach().cpu().numpy()
 
                         probs = torch.sigmoid(seg_logits) 
                         pred_mask = (probs > 0.5).float()
