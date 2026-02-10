@@ -240,6 +240,11 @@ def main():
                         union = (pred_mask + cropped_real_mask - pred_mask * cropped_real_mask).sum()
                         iou = (intersection + 1e-6) / (union + 1e-6)
 
+                        intersection = (pseudo_mask * cropped_real_mask).sum()
+                        union = (pseudo_mask + cropped_real_mask - pseudo_mask * cropped_real_mask).sum()
+                        iou_pseudo = (intersection + 1e-6) / (union + 1e-6)
+
+
                         wandb.log({
                             "Sample Image": wandb.Image(im, caption=f"Path: {p}"),
                             "Cropped Real mask": wandb.Image(cropped_real_mask),
@@ -247,7 +252,7 @@ def main():
                             "Val Sample - Teacher Aug": wandb.Image(teacher_aug),
                             "Val Sample - Student Output Heatmap": wandb.Image(student_heatmap),
                             "Val Sample - Teacher Output Heatmap": wandb.Image(teacher_heatmap),
-                            "Val Sample - Pseudo Segmentation Mask": wandb.Image(pseudo_mask),
+                            "Val Sample - Pseudo Segmentation Mask": wandb.Image(pseudo_mask, caption=f"IoU with Real Mask: {iou_pseudo:.4f}"),
                             "Val Sample - Pseudo Prediction prob": wandb.Image(seg_logit),
                             "Val Sample - Pseudo Prediction Mask": wandb.Image(pred_mask, caption=f"IoU:{iou:.4f}"),
                         })
