@@ -109,6 +109,7 @@ def main():
         params_to_optimize += list(s_head.parameters())
     
     optimizer = AdamW(params_to_optimize, lr=config['learningrate'], weight_decay=0.05)
+    scheduler       = CosineAnnealingLR(optimizer, config['epochs'], eta_min=config['learningrate'] / 10)
 
 
     ML_DATA_OUTPUT      = os.environ["ML_DATA_OUTPUT"]+'isic_1/'
