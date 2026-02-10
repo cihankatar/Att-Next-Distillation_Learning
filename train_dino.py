@@ -215,6 +215,7 @@ def main():
                     # Log heatmaps and augs for first batch only
                     if num_batches == 0:
                         b_idx, v_idx = 0, 0
+                        p = path[b_idx]
                         student_feat = student_feats[v_idx][b_idx].mean(dim=0).detach().cpu()
                         teacher_feat = teacher_feats[v_idx][b_idx].mean(dim=0).detach().cpu()
                         pseudo_mask  = seg_target[b_idx].permute(1,2,0).detach().cpu().numpy()
@@ -231,7 +232,7 @@ def main():
                         pred_mask = (probs > 0.5).float()
 
                         wandb.log({
-                            "Sample Image": wandb.Image(im, path=path[b_idx]),
+                            "Sample Image": wandb.Image(im, caption=f"Path: {p}"),
                             "Cropped Real mask": wandb.Image(cropped_real_mask),
                             "Val Sample - Student Aug": wandb.Image(student_aug),
                             "Val Sample - Teacher Aug": wandb.Image(teacher_aug),
