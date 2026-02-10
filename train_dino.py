@@ -102,7 +102,6 @@ def main():
 
     loss_fn         = DINOLoss()
     checkpoint_path = folder_path+str(student.__class__.__name__)+str(res)
-    scheduler       = CosineAnnealingLR(optimizer, config['epochs'], eta_min=config['learningrate'] / 10)
 
     params_to_optimize = list(student.parameters())
     if dinowithsegloss:
@@ -110,7 +109,6 @@ def main():
     
     optimizer = AdamW(params_to_optimize, lr=config['learningrate'], weight_decay=0.05)
     scheduler       = CosineAnnealingLR(optimizer, config['epochs'], eta_min=config['learningrate'] / 10)
-
 
     ML_DATA_OUTPUT      = os.environ["ML_DATA_OUTPUT"]+'isic_1/'
     checkpoint_path_read = ML_DATA_OUTPUT+str(student.__class__.__name__)+str(res)
