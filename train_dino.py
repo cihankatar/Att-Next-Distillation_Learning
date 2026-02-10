@@ -279,14 +279,14 @@ def main():
                         wandb.log({
                             "Sample Image": wandb.Image(im, caption=f"{p}"),
                             "Cropped Real mask": wandb.Image(cropped_real_mask),
-                            "Val Sample - Student Aug": wandb.Image(student_aug),
-                            "Val Sample - Teacher Aug": wandb.Image(teacher_aug),
-                            "Val Sample - Student Output Heatmap": wandb.Image(student_heatmap),
-                            "Val Sample - Teacher Output Heatmap": wandb.Image(teacher_heatmap),
-                            "Val Sample - Pseudo Segmentation Mask": wandb.Image(pseudo_mask, caption=f"IoU with Real Mask: {iou_pseudo:.4f}"),
-                            "Val Sample - Monitor Head Prediction prob": wandb.Image(seg_monitor),
-                            "Val Sample - Auxillary Seg Prediction prob": wandb.Image(seg_logit) if dinowithsegloss else None,
-                            "Val Sample - Monitor Head Prediction Mask": wandb.Image(pred_mask, caption=f"IoU:{iou:.4f}"),
+                            "Student Aug": wandb.Image(student_aug),
+                            "Teacher Aug": wandb.Image(teacher_aug),
+                            "Student Output Heatmap": wandb.Image(student_heatmap),
+                            "Teacher Output Heatmap": wandb.Image(teacher_heatmap),
+                            "Pseudo Segmentation Mask": wandb.Image(pseudo_mask, caption=f"IoU with Real Mask: {iou_pseudo:.4f}"),
+                            "Monitor Head Prediction prob": wandb.Image(seg_monitor),
+                            "Auxillary Seg Prediction prob": wandb.Image(seg_logit) if dinowithsegloss else None,
+                            "Monitor Head Prediction Mask": wandb.Image(pred_mask, caption=f"IoU:{iou:.4f}"),
                         })
 
                 num_batches += 1
