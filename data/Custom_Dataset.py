@@ -73,12 +73,12 @@ class dataset(Dataset):
             if self.training_type == "ssl":
                 image = dullrazor(image)
                 # this returns a list of 8 tensors
-                image, student_views, teacher_views, pseudo_mask = self.tr(image)
+                image, cropped_real_mask, student_views, teacher_views, pseudo_mask = self.tr(image,mask)
                 #pseudo_mask = random_walker_pseudo_mask(image)  # [1, H, W], 0 or 1
   
                 # now you can return them however your SSL loop expects:
                 # e.g. (teacher_views, student_views, mask) or flatten all:
-                return image, student_views, teacher_views, pseudo_mask
+                return image, self.train_path[index], cropped_real_mask, student_views, teacher_views, pseudo_mask
 
             return image , mask
     

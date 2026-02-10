@@ -14,6 +14,7 @@ import skimage.filters as filters
 import skimage.morphology as morph
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+import torchvision.transforms.functional as TF
 
 def pca_channel(img, gray):
     """
@@ -71,34 +72,6 @@ def random_walker_pseudo_mask(img_tensor):
     pseudo = morph.remove_small_holes(pseudo.astype(bool), area_threshold=32*32).astype(np.uint8)
     pseudo = morph.remove_small_objects(pseudo.astype(bool), min_size=64).astype(np.uint8)
 
-    # hsv = color.rgb2hsv(img_np)
-    # lab = color.rgb2lab(img_np)
-    # H, S, V = hsv[:,:,0], hsv[:,:,1], hsv[:,:,2]
-    # L, A, B = lab[:,:,0], lab[:,:,1], lab[:,:,2]
-    # A_norm = (A -A.min()) / (A.max() - A.min())
-    # B_norm = (B -B.min()) / (B.max() - B.min())
-    # S_norm = (S -S.min()) / (S.max() - S.min())
-    # img = np.stack([A_norm, B_norm, S_norm], axis=-1)
-    # gr = (0.2 * A_norm + 0.2 * B_norm + 0.6 * S_norm)
-    # pca_channel_img = pca_channel(img, gray)
-
-    # # (b) Rough Otsu threshold
-    # th = filters.threshold_otsu(pca_channel_img)
-    # rough_binar = (pca_channel_img < th).astype(np.uint8)  
-    # delta = 0.10 * (pca_channel_img.max() - pca_channel_img.min())
-    # m = np.zeros_like(pca_channel_img, dtype=np.int32)
-    # m[ pca_channel_img <  (th - delta) ] = 1  
-    # m[ pca_channel_img >  (th + delta) ] = 2  
-    # m[pca_channel_img < 0.1] = 2
-    # # (d) Run Random Walker
-    # rw_label = seg.random_walker(pca_channel_img, m, beta=90, mode='bf')  
-    # p = (rw_label == 1).astype(np.uint8)
-
-    # # (e) Morphological cleanup: fill small holes, remove small objects
-    # p = morph.remove_small_holes(p.astype(bool), area_threshold=32*32).astype(np.uint8)
-    # p = morph.remove_small_objects(p.astype(bool), min_size=64).astype(np.uint8)
-
-    # Convert back to Torch tensor, shape [1, H, W]
     return torch.from_numpy(pseudo).unsqueeze(0).float()
 
 
@@ -119,7 +92,7 @@ def data_transform():
         v2.ToTensor()
     ])
 
-    # --- COLOR ONLY (used after Gabor) ---
+    # --- COLOR ONLY (used after pseudo) ---
     color_transform_global = v2.Compose([
         v2.RandomApply([v2.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
         v2.RandomGrayscale(p=0.2),
@@ -135,13 +108,13 @@ def data_transform():
         v2.Normalize(IMAGENET_MEAN, IMAGENET_STD)
     ])
 
-    return DinoGaborMultiCropTransform(
+    return DinoMultiCropTransform(
         crop_transform_global, color_transform_global,
         crop_transform_local, color_transform_local,
         n_global=1, n_local=1
     )
 
-class DinoGaborMultiCropTransform:
+class DinoMultiCropTransform:
     def __init__(self, crop_transform_global, color_transform_global,
                  crop_transform_local, color_transform_local,
                  n_global=1, n_local=1):
@@ -153,32 +126,41 @@ class DinoGaborMultiCropTransform:
         self.n_global = n_global
         self.n_local = n_local
 
-    def __call__(self, img):
-        student_crops, teacher_crops = [], []
+    def __call__(self, img,real_mask):
+        student_crops, teacher_crops,real_mask_crops = [],[], []
         pseudo_masks = []
 
-        # 2 global crops for teacher
+        # global crops for teacher
         for _ in range(self.n_global):
             cropped = self.crop_global(img)
             transformed = self.color_global(cropped)
             teacher_crops.append(transformed)
 
-        # Global crops for student
+        # global crops for student + pseudo masks + real mask 
         for _ in range(self.n_global):
-            cropped_g = self.crop_global(img)
-            transformed_g = self.color_global(cropped_g)
-            student_crops.append(transformed_g)
-            pseudo_mask = random_walker_pseudo_mask(cropped_g)  # [1, H, W], 0 or 1
+
+            i, j, h, w = v2.RandomResizedCrop.get_params(img, scale=(0.4, 1.0), ratio=(3.0/4.0, 4.0/3.0))
+            
+            crop_img = TF.resized_crop(img, i, j, h, w, size=(256, 256), antialias=True)
+            crop_mask = TF.resized_crop(real_mask, i, j, h, w, size=(256, 256), interpolation=TF.InterpolationMode.NEAREST)
+            
+            if torch.rand(1) < 0.5:
+                crop_img = TF.hflip(crop_img)
+                crop_mask = TF.hflip(crop_mask)
+
+            transformed_img = self.color_global(crop_img) # Color transform sadece görüntüye!
+            student_crops.append(transformed_img)
+            pseudo_mask = random_walker_pseudo_mask(crop_img)  # [1, H, W], 0 or 1
             pseudo_masks.append(pseudo_mask)
+            real_mask_crops.append(crop_mask)
 
         # local crops for student
         for _ in range(self.n_local):
-
             cropped = self.crop_local(img)
             transformed = self.color_local(cropped)
             student_crops.append(transformed)
 
-        return img,student_crops, teacher_crops, pseudo_masks  # ← must be out here!
+        return img, real_mask_crops,student_crops, teacher_crops, pseudo_masks  # 
 
 def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_box,shuffle,split_ratio,data):
 
@@ -234,7 +216,7 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
         data_train  = dataset(train_im_path[5:10],train_mask_path[5:10],cutout_pr,cutout_box, transformations,mode)
 
     else:  #test in local
-        data_test   = dataset(test_im_path, test_mask_path,cutout_pr,cutout_box, transformations,mode)
+        data_test   = dataset(test_im_path[5:10], test_mask_path[5:10], cutout_pr,cutout_box, transformations,mode)
 
     if op == "train":
         train_loader = DataLoader(
