@@ -231,7 +231,7 @@ def main():
                         im                    = img[b_idx].permute(1,2,0).detach().cpu().numpy()
                         cropped_real_mask     = cropped_real_mask[v_idx][b_idx].permute(1,2,0).detach().cpu().numpy()
 
-                        prob = torch.sigmoid(seg_logits[b_idx].permute(1,2,0).detach().cpu().numpy() ) 
+                        prob = torch.sigmoid(seg_logits[b_idx]).permute(1,2,0).detach().cpu().numpy() 
                         pred_mask = (prob > 0.5).float()
                         "calculate IoU for the predicted mask and the real mask"
 
