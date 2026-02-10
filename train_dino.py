@@ -255,7 +255,6 @@ def main():
                         pseudo_mask  = seg_target[b_idx].permute(1,2,0).detach().cpu().numpy()
                         if dinowithsegloss:
                             seg_logit    = seg_logits[b_idx].permute(1,2,0).detach().cpu().numpy()
-                        seg_monitor   = seg_monitor[b_idx]
 
                         student_heatmap = featuremap_to_heatmap(student_feat)
                         teacher_heatmap = featuremap_to_heatmap(teacher_feat)
