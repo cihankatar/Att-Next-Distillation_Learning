@@ -126,6 +126,15 @@ class DinoMultiCropTransform:
         self.n_global = n_global
         self.n_local = n_local
 
+        print(f"--- DinoMultiCropTransform Initialized ---")
+        print(f"n_global: {self.n_global}")
+        print(f"n_local : {self.n_local}")
+        print(f"crop_transform_local: {self.crop_local}")
+        print(f"crop_transform_global: {self.crop_global}") 
+        print(f"color_transform_local: {self.color_local}")
+        print(f"color_transform_global: {self.color_global}")
+        print(f"----------------------------------------")
+
     def __call__(self, img,real_mask):
         student_crops, teacher_crops,real_mask_crops = [],[], []
         pseudo_masks = []

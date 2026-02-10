@@ -71,7 +71,6 @@ def main():
     config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data)
     args.suffle         = False
     print("train_im_path", os.environ["ML_DATA_ROOT"]+"train/images") 
-
     # Data Loaders
     def create_loader(operation):
 
@@ -83,6 +82,8 @@ def main():
     
     val_loader      = create_loader(args.op)
     args.op         = "train"
+    
+
     # Student & Teacher modeli
     #model     = UNET(1).to(device)
     model     = model_dice_bce().to(device)
@@ -148,8 +149,10 @@ def main():
 
         teacher_temp = get_teacher_temp(epoch_idx)
         current_lr = optimizer.param_groups[0]['lr']
+        
         print("teacher temp", teacher_temp, "\n")
         print("current_lr", current_lr, "\n")
+
         with torch.set_grad_enabled(training):
             for img, path, cropped_real_mask, student_augs, teacher_augs, pseudo_masks in loader:
 
@@ -230,6 +233,12 @@ def main():
 
                         probs = torch.sigmoid(seg_logits) 
                         pred_mask = (probs > 0.5).float()
+                        "calculate IoU for the predicted mask and the real mask"
+
+                        # IoU calculation
+                        intersection = (pred_mask * cropped_real_mask).sum()
+                        union = (pred_mask + cropped_real_mask - pred_mask * cropped_real_mask).sum()
+                        iou = (intersection + 1e-6) / (union + 1e-6)
 
                         wandb.log({
                             "Sample Image": wandb.Image(im, caption=f"Path: {p}"),
@@ -240,7 +249,7 @@ def main():
                             "Val Sample - Teacher Output Heatmap": wandb.Image(teacher_heatmap),
                             "Val Sample - Pseudo Segmentation Mask": wandb.Image(pseudo_mask),
                             "Val Sample - Pseudo Prediction prob": wandb.Image(seg_logit),
-                            "Val Sample - Pseudo Prediction Mask": wandb.Image(pred_mask),
+                            "Val Sample - Pseudo Prediction Mask": wandb.Image(pred_mask, caption=f"IoU:{iou:.4f}"),
                         })
 
                 num_batches += 1
