@@ -200,9 +200,9 @@ def main():
                 # Compute segmentation loss
                 if training:
                     if dinowithsegloss:
-                        seg_loss = F.binary_cross_entropy_with_logits(seg_logits, seg_target)
-                        loss_c = loss_fn(student_proj, teacher_proj, teacher_temp)
-                        loss = loss_c * weigt + seg_loss
+                        seg_loss  = F.binary_cross_entropy_with_logits(seg_logits, seg_target)
+                        loss_c    = loss_fn(student_proj, teacher_proj, teacher_temp)
+                        loss      = loss_c * weigt + seg_loss
                         optimizer.zero_grad()
                         loss.backward()
                         optimizer.step()
@@ -216,18 +216,15 @@ def main():
                         epoch_seg_loss += 0.0
 
 
-                    detached_features = [f.detach() for f in student_feats]
+                    detached_features  = [f.detach() for f in student_feats]
                     seg_monitor        = monitor_head(detached_features[0])   
-                    monitor_loss = F.binary_cross_entropy_with_logits(seg_monitor, real_seg_target.type_as(seg_monitor))
+                    monitor_loss       = F.binary_cross_entropy_with_logits(seg_monitor, real_seg_target.type_as(seg_monitor))
                     optimizer_monitor.zero_grad()
                     monitor_loss.backward()
                     optimizer_monitor.step() 
 
                     epoch_loss += loss.item()
                     epoch_monitor_loss += monitor_loss.item()
-
-                    iou = compute_batch_iou(seg_logits, real_seg_target)
-                    epoch_iou += iou
 
                     update_teacher(student, teacher, momentum)
                     update_teacher(student_head, teacher_head, momentum)
@@ -244,6 +241,10 @@ def main():
 
                     val_loss = torch.stack(pairwise, dim=1).mean()
                     epoch_val_loss += val_loss.item()
+                    
+                    seg_monitor        = monitor_head(student_feats[0])   
+                    iou = compute_batch_iou(seg_monitor, real_seg_target)
+                    epoch_iou += iou
 
                     # Log heatmaps and augs for first batch only
                     if num_batches == 0:
@@ -252,19 +253,21 @@ def main():
                         student_feat = student_feats[v_idx][b_idx].mean(dim=0).detach().cpu()
                         teacher_feat = teacher_feats[v_idx][b_idx].mean(dim=0).detach().cpu()
                         pseudo_mask  = seg_target[b_idx].permute(1,2,0).detach().cpu().numpy()
-                        seg_logit    = seg_logits[b_idx].permute(1,2,0).detach().cpu().numpy() 
+                        if dinowithsegloss:
+                            seg_logit    = seg_logits[b_idx].permute(1,2,0).detach().cpu().numpy()
+                        seg_monitor   = seg_monitor[b_idx].permute(1,2,0).detach().cpu().numpy()
+
                         student_heatmap = featuremap_to_heatmap(student_feat)
                         teacher_heatmap = featuremap_to_heatmap(teacher_feat)
+
                         student_aug  = student_augs[v_idx][b_idx].permute(1,2,0).detach().cpu().numpy()
                         teacher_aug  = teacher_augs[v_idx][b_idx].permute(1,2,0).detach().cpu().numpy() 
 
                         im                    = img[b_idx].permute(1,2,0).detach().cpu().numpy()
                         cropped_real_mask     = cropped_real_mask[v_idx][b_idx].permute(1,2,0).detach().cpu().numpy()
 
-                        prob = torch.sigmoid(seg_logits[b_idx])
+                        prob = torch.sigmoid(seg_monitor[b_idx])
                         pred_mask = (prob > 0.5).float().permute(1,2,0).detach().cpu().numpy() 
-
-                        # IoU calculation
                         intersection = (pred_mask * cropped_real_mask).sum()
                         union = (pred_mask + cropped_real_mask - pred_mask * cropped_real_mask).sum()
                         iou = (intersection + 1e-6) / (union + 1e-6)
@@ -273,17 +276,17 @@ def main():
                         union = (pseudo_mask + cropped_real_mask - pseudo_mask * cropped_real_mask).sum()
                         iou_pseudo = (intersection + 1e-6) / (union + 1e-6)
 
-
                         wandb.log({
-                            "Sample Image": wandb.Image(im, caption=f"Path: {p}"),
+                            "Sample Image": wandb.Image(im, caption=f"{p}"),
                             "Cropped Real mask": wandb.Image(cropped_real_mask),
                             "Val Sample - Student Aug": wandb.Image(student_aug),
                             "Val Sample - Teacher Aug": wandb.Image(teacher_aug),
                             "Val Sample - Student Output Heatmap": wandb.Image(student_heatmap),
                             "Val Sample - Teacher Output Heatmap": wandb.Image(teacher_heatmap),
                             "Val Sample - Pseudo Segmentation Mask": wandb.Image(pseudo_mask, caption=f"IoU with Real Mask: {iou_pseudo:.4f}"),
-                            "Val Sample - Pseudo Prediction prob": wandb.Image(seg_logit),
-                            "Val Sample - Pseudo Prediction Mask": wandb.Image(pred_mask, caption=f"IoU:{iou:.4f}"),
+                            "Val Sample - Monitor Head Prediction prob": wandb.Image(seg_monitor),
+                            "Val Sample - Auxillary Seg Prediction prob": wandb.Image(seg_logit) if dinowithsegloss else None,
+                            "Val Sample - Monitor Head Prediction Mask": wandb.Image(pred_mask, caption=f"IoU:{iou:.4f}"),
                         })
 
                 num_batches += 1
