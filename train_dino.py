@@ -214,8 +214,7 @@ def main():
                         loss.backward()
                         optimizer.step()
                         epoch_seg_loss += 0.0
-
-
+                        
                     detached_features  = [f.detach() for f in student_feats]
                     seg_monitor        = monitor_head(detached_features[0])   
                     monitor_loss       = F.binary_cross_entropy_with_logits(seg_monitor, real_seg_target.type_as(seg_monitor))
