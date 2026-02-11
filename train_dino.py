@@ -10,9 +10,7 @@ import torch.nn.functional as F
 from wandb_init import parser_init, wandb_init
 from models.Model import model_dice_bce
 from utils.Heads import ProjectionHead, SegmentationSHead, SegmentationMHead, get_teacher_momentum, get_teacher_temp
-from models.Unet import UNET
 from utils.Loss_dino import DINOLoss
-from torch.nn.utils import clip_grad_norm_
 from torch import nn 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -280,7 +278,7 @@ def main():
                             "Teacher Aug": wandb.Image(teacher_aug),
                             "Student Output Heatmap": wandb.Image(student_heatmap),
                             "Teacher Output Heatmap": wandb.Image(teacher_heatmap),
-                            "Monitor Head Prediction prob": wandb.Image(prob),
+                            "Monitor Head Prediction prob": wandb.Image(prob.detach().cpu().numpy()) ,
                             "Auxillary Seg Prediction prob": wandb.Image(seg_logit) if dinowithsegloss else None,
                             "Monitor Head Prediction Mask": wandb.Image(pred_mask, caption=f"IoU:{iou:.4f}"),
                             "Pseudo Segmentation Mask": wandb.Image(pseudo_mask, caption=f"IoU with Real Mask: {iou_pseudo:.4f}"),
@@ -314,7 +312,12 @@ def main():
         print("epoch_idx",epoch_idx,"\n")
         
         # Print losses and validation metrics
-        print(f"Train Loss: {train_loss:.4f}, Segmentation Loss : {seg_loss:.4f}, Dino Loss: {(train_loss-seg_loss)*(1/weight):.4f}, Monitor Loss : {monitor_loss:.4f}")
+
+        if dinowithsegloss:
+            print(f"Total Loss: {train_loss:.4f}, Segmentation Loss : {seg_loss:.4f}, Dino Loss: {(train_loss-seg_loss)*(1/weight):.4f}, Monitor Loss : {monitor_loss:.4f}")
+        else:
+            print(f"Dino Loss: {train_loss:.4f}, Monitor Loss : {monitor_loss:.4f}")
+        
         print(f"Validation Cosine Similarity: {cos_sim:.4f}")
         print(f"Validation IoU: {val_iou:.4f}")
 
