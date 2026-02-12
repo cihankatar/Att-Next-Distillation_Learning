@@ -199,7 +199,7 @@ def main():
                     if dinowithsegloss:
                         seg_loss  = F.binary_cross_entropy_with_logits(seg_logits, seg_target)
                         loss_c    = loss_fn(student_proj, teacher_proj, teacher_temp)
-                        loss      = loss_c * weigt + seg_loss
+                        loss      = loss_c + seg_loss
                         optimizer.zero_grad()
                         loss.backward()
                         optimizer.step()
