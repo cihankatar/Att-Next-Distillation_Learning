@@ -11,7 +11,7 @@ from wandb_init import parser_init, wandb_init
 from models.Model import model_dice_bce
 from utils.Heads import ProjectionHead, SegmentationSHead, SegmentationMHead, get_teacher_momentum, get_teacher_temp
 from utils.Loss_dino import DINOLoss
-from torch import nn 
+from torch.nn.utils import clip_grad_norm_
 import matplotlib.pyplot as plt
 import numpy as np
 import time
@@ -84,16 +84,16 @@ def update_teacher(student, teacher, momentum):
 
 def main():
 
-    data, training_mode, op, dinowithsegloss = 'isic_2018_1', "ssl", "train",True
+    data, training_mode, op, dinowithsegloss, startwithcombinedloss = 'isic_2018_1', "ssl", "train",True,True
 
     best_loss   = float("inf")
     device      = using_device()
     folder_path = setup_paths(data)
     args, res   = parser_init("segmentation task", op, training_mode)
     res         = " ".join(res)
-    res         = "["+res+"]"
+    res         = "["+res+"]" + f"_segloss_{dinowithsegloss}_combinedloss_{startwithcombinedloss}"
 
-    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data)
+    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss, startwithcombinedloss)
     args.suffle         = False
     print("train_im_path", os.environ["ML_DATA_ROOT"]+"train/images") 
     # Data Loaders
@@ -103,8 +103,8 @@ def main():
                       args.imsize, args.cutoutpr, args.cutoutbox, args.shuffle, args.sratio, data)
 
     train_loader    = create_loader(args.op)
+
     args.op         =  "validation"
-    
     val_loader      = create_loader(args.op)
     args.op         = "train"
     
@@ -137,6 +137,7 @@ def main():
     scheduler       = CosineAnnealingLR(optimizer, config['epochs'], eta_min=config['learningrate'] / 10)
 
     ML_DATA_OUTPUT      = os.environ["ML_DATA_OUTPUT"]+'isic_1/'
+
     checkpoint_path_read = ML_DATA_OUTPUT+str(student.__class__.__name__)+str(res)
     #student.load_state_dict(torch.load(checkpoint_path_read, map_location=torch.device('cpu')))
     checkpoint_path_head = ML_DATA_OUTPUT+str(s_head.__class__.__name__)+str(res)
@@ -159,7 +160,7 @@ def main():
     def run_epoch(loader, epoch_idx, momentum, weigt,training=True):
         epoch_loss  = 0.0
         num_batches = 0
-        epoch_val_loss, epoch_seg_loss,epoch_monitor_loss, epoch_iou = 0.0, 0.0, 0.0, 0.0
+        epoch_val_loss, epoch_seg_loss,epoch_monitor_loss, epoch_iou, epoch_dino_loss = 0.0, 0.0, 0.0, 0.0, 0.0
 
         if training:
             student.train()
@@ -198,19 +199,25 @@ def main():
                 if training:
                     if dinowithsegloss:
                         seg_loss  = F.binary_cross_entropy_with_logits(seg_logits, seg_target)
-                        loss_c    = loss_fn(student_proj, teacher_proj, teacher_temp)
-                        loss      = loss_c + seg_loss
+                        loss_d    = loss_fn(student_proj, teacher_proj, teacher_temp)
+                        if startwithcombinedloss:
+                            loss      = loss_d + seg_loss
+                        else:
+                            loss      = loss_d + seg_loss if epoch_idx > 30 else loss_d  # add seg loss after 30 epochs
+
                         optimizer.zero_grad()
                         loss.backward()
                         optimizer.step()
                         epoch_seg_loss += seg_loss.item()
+                        epoch_dino_loss += loss_d.item()
+                        epoch_loss += loss.item()
 
                     else:
-                        loss = loss_fn(student_proj, teacher_proj, teacher_temp)
+                        loss_d = loss_fn(student_proj, teacher_proj, teacher_temp)
                         optimizer.zero_grad()
-                        loss.backward()
+                        loss_d.backward()
                         optimizer.step()
-                        epoch_seg_loss += 0.0
+                        epoch_dino_loss += loss_d.item()
 
                     detached_features  = [f.detach() for f in student_feats]
                     seg_monitor        = monitor_head(detached_features[0])   
@@ -219,7 +226,6 @@ def main():
                     monitor_loss.backward()
                     optimizer_monitor.step() 
 
-                    epoch_loss += loss.item()
                     epoch_monitor_loss += monitor_loss.item()
 
                     update_teacher(student, teacher, momentum)
@@ -289,18 +295,23 @@ def main():
         if not training:
             return epoch_val_loss / len(loader), epoch_iou / len(loader)
 
-        return epoch_loss / len(loader), epoch_seg_loss / len(loader), epoch_monitor_loss / len(loader)
-
+        if dinowithsegloss:
+            return epoch_loss / len(loader), epoch_dino_loss/ len(loader), epoch_seg_loss / len(loader), epoch_monitor_loss / len(loader)
+        else:
+            return None, epoch_dino_loss/ len(loader),None, epoch_monitor_loss / len(loader)
+        
     epoch_idx=0
+
     for epoch in trange(config['epochs'], desc="Epochs"):
 
         # Training
-        weight = 0.1 
+        weight = 1 
         current_momentum = get_teacher_momentum(epoch, config['epochs'])
-        train_loss,seg_loss,monitor_loss = run_epoch(train_loader, epoch_idx, current_momentum,weight,training=True )
-        wandb.log({"Train Loss": train_loss,
-                    "seg_loss": seg_loss, 
-                    "monitor_loss": monitor_loss})
+        total_loss, dino_loss, seg_loss, monitor_loss = run_epoch(train_loader, epoch_idx, current_momentum,weight,training=True )
+        wandb.log({"Train Loss": total_loss, 
+                   "Dino Loss": dino_loss,
+                    "Seg_Loss": seg_loss,
+                    "Monitor_Loss": monitor_loss})
         scheduler.step()
 
         cos_sim,val_iou = run_epoch(val_loader, epoch_idx,current_momentum,weight,training=False)
@@ -312,20 +323,19 @@ def main():
         print("epoch_idx",epoch_idx,"\n")
         
         # Print losses and validation metrics
-
         if dinowithsegloss:
-            print(f"Total Loss: {train_loss:.4f}, Segmentation Loss : {seg_loss:.4f}, Dino Loss: {(train_loss-seg_loss)*(1/weight):.4f}, Monitor Loss : {monitor_loss:.4f}")
+            print(f"Total Loss: {total_loss:.4f}, Segmentation Loss : {seg_loss:.4f}, Dino Loss: {(dino_loss):.4f}, Monitor Loss : {monitor_loss:.4f}")
         else:
-            print(f"Dino Loss: {train_loss:.4f}, Monitor Loss : {monitor_loss:.4f}")
-        
+            print(f"Dino Loss: {total_loss:.4f}, Monitor Loss : {monitor_loss:.4f}")
+    
         print(f"Validation Cosine Similarity: {cos_sim:.4f}")
         print(f"Validation IoU: {val_iou:.4f}")
 
 
         # Save best model
         if epoch_idx>50:
-            if train_loss < best_loss:
-                best_loss = train_loss
+            if total_loss < best_loss:
+                best_loss = total_loss
                 torch.save(student.state_dict(), checkpoint_path)
                 print(f"Best model saved")
 

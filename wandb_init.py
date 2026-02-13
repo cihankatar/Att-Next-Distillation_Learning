@@ -14,7 +14,7 @@ def config_func(training_mode):
         "sslmode_modelname" :"Dino",
         "imnetpr"           :False,
         "bsize"             :8, 
-        "epochs"            :199,
+        "epochs"            :200,
         "imsize"            :256,
         "lrate"             :0.0001,
         "aug"               :False,
@@ -119,7 +119,7 @@ def parser_init(name, op, training_mode=None):
     else:
         return args,res
 
-def wandb_init (WANDB_API_KEY,WANDB_DIR,args,data):
+def wandb_init (WANDB_API_KEY,WANDB_DIR,args,data,dinowithsegloss, startwithcombinedloss):
     
     op                  = args.op
     training_mode       = args.mode
@@ -153,7 +153,7 @@ def wandb_init (WANDB_API_KEY,WANDB_DIR,args,data):
         project_name = data+"AAtt-Next-SSL_Test"
 
                 
-    wandb.init(project=project_name, dir=WANDB_DIR, name=f"{args.mode}_s{args.sratio}_ep{args.epochs}",
+    wandb.init(project=project_name, dir=WANDB_DIR, name=f"{args.mode}_s{args.sratio}_ep{args.epochs}_segloss_{dinowithsegloss}__combinedloss_{startwithcombinedloss}",
         config={
             "operation"       : op,
             "training_mode"   : training_mode,
