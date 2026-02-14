@@ -333,12 +333,18 @@ def main():
 
 
         # Save best model
-        if epoch_idx>50:
-            if total_loss < best_loss:
-                best_loss = total_loss
-                torch.save(student.state_dict(), checkpoint_path)
-                print(f"Best model saved")
 
+        if epoch_idx>30:
+            if dinowithsegloss:
+                if total_loss < best_loss:
+                    best_loss = total_loss
+                    torch.save(student.state_dict(), checkpoint_path)
+                    print(f"Best model saved")
+
+            elif dino_loss >= best_loss:
+                    best_loss = dino_loss
+                    torch.save(student.state_dict(), checkpoint_path)
+                    print(f"Best model saved")
     wandb.finish()
 
 if __name__ == "__main__":
