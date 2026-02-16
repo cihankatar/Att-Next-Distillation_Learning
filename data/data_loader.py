@@ -83,7 +83,7 @@ def data_transform():
     ])
     
     crop_transform_local = v2.Compose([
-        v2.RandomResizedCrop(128, scale=(0.4, 1), antialias=True),
+        v2.RandomResizedCrop(128, scale=(0.1, 0.4), antialias=True),
         v2.RandomHorizontalFlip(p=0.5),
         v2.ToTensor()
     ])
