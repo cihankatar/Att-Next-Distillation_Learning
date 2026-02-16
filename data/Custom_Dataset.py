@@ -39,12 +39,12 @@ def dullrazor(img, th=0.05):
     clean = patch_fill(img, hair_mask_3ch)  # -> [1, 3, H, W]
     return clean.squeeze(0).clamp(0, 1)     # -> [3, H, W]
 
-
 class dataset(Dataset):
-    def __init__(self,train_path,mask_path,cutout_pr,cutout_box,transforms,training_type): #
+    def __init__(self,train_path,mask_path,pmask_path,cutout_pr,cutout_box,transforms,training_type): #
         super().__init__()
         self.train_path     = train_path
         self.mask_path      = mask_path
+        self.pmask_path     = pmask_path
         self.tr             = transforms
         self.cutout_pr      = cutout_pr
         self.cutout_pad     = cutout_box
@@ -67,18 +67,25 @@ class dataset(Dataset):
             mask = torch.from_numpy(mask)
             mask = mask.unsqueeze(0)
 
+            pseudo_mask = Image.open(self.pmask_path[index]).convert('L')            
+            pseudo_mask = np.array(pseudo_mask,dtype=float)
+            pseudo_mask = pseudo_mask.astype(np.float32)
+            pseudo_mask = torch.from_numpy(pseudo_mask)
+            pseudo_mask = pseudo_mask.unsqueeze(0)
+
             image=image/255
             mask=mask/255
-            
+            pseudo_mask=pseudo_mask/255
+
             if self.training_type == "ssl":
-                image = dullrazor(image)
+                # image = dullrazor(image)
                 # this returns a list of 8 tensors
-                image, cropped_real_mask, student_views, teacher_views, pseudo_mask = self.tr(image,mask)
+                image, cropped_real_mask, student_views, teacher_views, pseudo_mask = self.tr(image,mask,pseudo_mask)
                 #pseudo_mask = random_walker_pseudo_mask(image)  # [1, H, W], 0 or 1
-  
+
                 # now you can return them however your SSL loop expects:
                 # e.g. (teacher_views, student_views, mask) or flatten all:
                 return image, self.train_path[index], cropped_real_mask, student_views, teacher_views, pseudo_mask
 
-            return image , mask
+            return image , mask ,pseudo_mask
     

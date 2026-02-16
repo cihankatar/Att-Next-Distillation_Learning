@@ -131,7 +131,7 @@ class DinoMultiCropTransform:
         print(f"color_transform_global: {self.color_global}")
         print(f"----------------------------------------")
 
-    def __call__(self, img,real_mask):
+    def __call__(self, img,real_mask,pseudo_mask):
         student_crops, teacher_crops,real_mask_crops = [],[], []
         pseudo_masks = []
 
@@ -145,18 +145,20 @@ class DinoMultiCropTransform:
         for _ in range(self.n_global):
 
             i, j, h, w = v2.RandomResizedCrop.get_params(img, scale=(0.4, 1.0), ratio=(3.0/4.0, 4.0/3.0))
-            
+            pseudo_mask_512 = TF.resize(pseudo_mask, size=(512, 512), interpolation=TF.InterpolationMode.NEAREST)
             crop_img = TF.resized_crop(img, i, j, h, w, size=(256, 256), antialias=True)
             crop_mask = TF.resized_crop(real_mask, i, j, h, w, size=(256, 256), interpolation=TF.InterpolationMode.NEAREST)
-            
+            crop_pseudo = TF.resized_crop(pseudo_mask_512, i, j, h, w, size=(256, 256), interpolation=TF.InterpolationMode.NEAREST)
+
             if torch.rand(1) < 0.5:
                 crop_img = TF.hflip(crop_img)
                 crop_mask = TF.hflip(crop_mask)
+                crop_pseudo = TF.hflip(crop_pseudo)
 
             transformed_img = self.color_global(crop_img) # Color transform sadece görüntüye!
             student_crops.append(transformed_img)
-            pseudo_mask = random_walker_pseudo_mask(crop_img)  # [1, H, W], 0 or 1
-            pseudo_masks.append(pseudo_mask)
+            #pseudo_mask = random_walker_pseudo_mask(crop_img)  # [1, H, W], 0 or 1
+            pseudo_masks.append(crop_pseudo)
             real_mask_crops.append(crop_mask)
 
         # local crops for student
@@ -193,35 +195,43 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
     if op =="train":
         train_im_path   = os.environ["ML_DATA_ROOT"]+foldernamepath+"train/images"   
         train_mask_path = os.environ["ML_DATA_ROOT"]+foldernamepath+"train/masks"
+        train_pmask_path = os.environ["ML_DATA_ROOT"]+foldernamepath+"train/pmasks"
         
         train_im_path   = sorted(glob(train_im_path+imageext))
         train_mask_path = sorted(glob(train_mask_path+maskext))
-    
+        train_pmask_path = sorted(glob(train_pmask_path+maskext))
+
     elif op == "validation":
         test_im_path    = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/images"
         test_mask_path  = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/masks"
+        test_pmask_path = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/pmasks"
+
         test_im_path    = sorted(glob(test_im_path+imageext))
         test_mask_path  = sorted(glob(test_mask_path+maskext))
+        test_pmask_path = sorted(glob(test_pmask_path+maskext))
 
     else :
         test_im_path    = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/images"
         test_mask_path  = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/masks"
+        test_pmask_path = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/pmasks"
+
         test_im_path    = sorted(glob(test_im_path+imageext))
         test_mask_path  = sorted(glob(test_mask_path+maskext))
+        test_pmask_path = sorted(glob(test_pmask_path+maskext))
 
     transformations = data_transform()
 
     if torch.cuda.is_available():
         if op == "train":
-            data_train  = dataset(train_im_path,train_mask_path,cutout_pr,cutout_box, transformations,mode)
+            data_train  = dataset(train_im_path,train_mask_path,train_pmask_path,cutout_pr,cutout_box, transformations,mode)
         else:
-            data_test   = dataset(test_im_path, test_mask_path,cutout_pr,cutout_box, transformations,mode)
+            data_test   = dataset(test_im_path, test_mask_path,test_pmask_path,cutout_pr,cutout_box, transformations,mode)
 
     elif op == "train":  #train for debug in local
-        data_train  = dataset(train_im_path[5:15],train_mask_path[5:15],cutout_pr,cutout_box, transformations,mode)
+        data_train  = dataset(train_im_path[5:15],train_mask_path[5:15],train_pmask_path[5:15],cutout_pr,cutout_box, transformations,mode)
 
     else:  #test in local
-        data_test   = dataset(test_im_path[5:15], test_mask_path[5:15], cutout_pr,cutout_box, transformations,mode)
+        data_test   = dataset(test_im_path[5:15], test_mask_path[5:15], test_pmask_path[5:15],cutout_pr,cutout_box, transformations,mode)
 
     if op == "train":
         train_loader = DataLoader(
