@@ -96,10 +96,12 @@ def main():
                 if training and args.aug:
                     images, labels = cutmix(images, labels, args.cutmixpr)
                     images, labels = Cutout(images, labels, args.cutoutpr, args.cutoutbox)
+                if idx % 20 == 0:
                 s_time = time.time()
                 out = model(images)
                 e_time = time.time()
-                print(f"Forward pass took {e_time - s_time:.4f} seconds") 
+                if idx % 20 == 0:
+                    print(f"Forward pass took {e_time - s_time:.4f} seconds") 
                 
                 loss_ = loss_fn.Dice_BCE_Loss(out, labels)
 
