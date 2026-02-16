@@ -65,8 +65,6 @@ class SegmentationTHead(nn.Module):
         x = F.interpolate(x, size=self.final_size, mode='bilinear', align_corners=False)
         return x
 
-
-
 class Head(nn.Module):
     def __init__(self):
         super().__init__()
@@ -87,7 +85,33 @@ class Head(nn.Module):
         out = self.pwconv2(out)
         out = out.permute(0, 3, 1, 2)
         return out 
+    
+# class Head(nn.Module):
+#     def __init__(self):
+#         super().__init__()
+#         # 1. padding=1 yapıldı (daha hızlı)
+#         self.conv = nn.Conv2d(64, 64, 3, padding=1, groups=64)
+        
+#         # 2. GroupNorm(1, C), LayerNorm ile tamamen aynı işi yapar ama NCHW destekler.
+#         self.norm = nn.GroupNorm(1, 64) 
+#         self.act = nn.GELU()
+        
+#         # 3. nn.Linear yerine 1x1 Conv2d kullanıyoruz (Aynı ağırlık matrisi, daha hızlı işleyiş)
+#         self.pwconv1 = nn.Conv2d(64, 64, kernel_size=1)
+#         self.pwconv2 = nn.Conv2d(64, 1, kernel_size=1)
 
+#     def forward(self, out):
+#         # İşlemler tamamen [B, C, H, W] formatında gerçekleşir, permute yapılmaz.
+#         out = self.conv(out)
+#         out = self.norm(out)
+#         out = self.act(out)
+
+#         out = self.pwconv1(out)
+#         out = self.act(out) # İkinci LayerNorm silindi, sadece aktivasyon yeterli
+
+#         out = self.pwconv2(out)
+        
+#         return out
 
 class Bottleneck(nn.Module):
     def __init__(self, in_c, out_c):

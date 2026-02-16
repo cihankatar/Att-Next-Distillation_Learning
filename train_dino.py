@@ -83,7 +83,7 @@ def update_teacher(student, teacher, momentum):
 
 def main():
 
-    data, training_mode, op, dinowithsegloss, startwithcombinedloss = 'isic_2018_1', "ssl", "train",True,False
+    data, training_mode, op, dinowithsegloss, startwithcombinedloss = 'isic_2018_1', "ssl", "train",True,True
 
     best_loss   = float("inf")
     device      = using_device()
