@@ -5,7 +5,7 @@ import torch.nn as nn
 from models.enc import encoder_function
 from models.dec import decoder_function
 import torch.nn.functional as F
-
+import time
 
 def device_f():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -88,6 +88,7 @@ class Head(nn.Module):
         out = out.permute(0, 3, 1, 2)
         return out 
 
+
 class Bottleneck(nn.Module):
     def __init__(self, in_c, out_c):
         super().__init__()
@@ -138,20 +139,31 @@ class model_dice_bce(nn.Module):
         if self.training_mode ==  "ssl_pretrained": 
             en_features = inputs
         else:
-            en_features = self.encoder(inputs)               # [2, 64, 64, 64]) ([2, 128, 32, 32]) [2, 320, 16, 16]) ([2, 512, 8, 8])
+            s_time = time.time()
+            en_features = self.encoder(inputs) 
+            e_time = time.time()              # [2, 64, 64, 64]) ([2, 128, 32, 32]) [2, 320, 16, 16]) ([2, 512, 8, 8])
+            print(f"encoder took {e_time - s_time:.4f} seconds")
 
-        
-        skip_connections = en_features[:3][::-1]
+        skip_connections = list(reversed(en_features[:3]))
 
         # BOTTLENECK
+        s_time = time.time()
         b   = self.bottleneck(en_features[3])                              # 1x 512 x 8x8
-
+        e_time = time.time()
+        print(f"bottleneck took {e_time - s_time:.4f} seconds") 
         # DECODER
-        out = self.decoder(b,skip_connections) 
-        #trainable_params             = sum(p.numel() for p in self.convnextdecoder.parameters() if p.requires_grad)
 
+        s_time = time.time()
+        out = self.decoder(b,skip_connections) 
+        e_time = time.time()
+        print(f"decoder took {e_time - s_time:.4f} seconds") 
+               
+
+        s_time = time.time()
         out=self.head(out)
-        
+        e_time = time.time()
+        print(f"head took {e_time - s_time:.4f} seconds") 
+
         return out
 
 

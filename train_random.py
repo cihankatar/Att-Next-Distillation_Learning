@@ -10,7 +10,7 @@ from augmentation.Augmentation import Cutout, cutmix
 from wandb_init import parser_init, wandb_init
 from utils.metrics import calculate_metrics
 from models.Model import model_dice_bce
-
+import time
 
 def using_device():
     """Set and print the device used for training."""
@@ -37,7 +37,7 @@ def setup_paths(data):
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op,addtopoloss = 'isic_2018_1', "supervised", "train",False
+    data, training_mode, op, dinowithsegloss, startwithcombinedloss,addtopoloss = 'isic_2018_1', "supervised", "train",False,False,False
 
     best_valid_loss   = float("inf")
     device      = using_device()
@@ -47,7 +47,7 @@ def main():
     res           = " ".join(res)
     res           = "["+res+"]"
     
-    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data)
+    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss, startwithcombinedloss)
 
     # Data Loaders
     def create_loader(operation):
@@ -96,9 +96,11 @@ def main():
                 if training and args.aug:
                     images, labels = cutmix(images, labels, args.cutmixpr)
                     images, labels = Cutout(images, labels, args.cutoutpr, args.cutoutbox)
-                
+                s_time = time.time()
                 out = model(images)
-
+                e_time = time.time()
+                print(f"Forward pass took {e_time - s_time:.4f} seconds") 
+                
                 loss_ = loss_fn.Dice_BCE_Loss(out, labels)
 
                 if addtopoloss:

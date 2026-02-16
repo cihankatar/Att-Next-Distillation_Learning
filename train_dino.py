@@ -11,7 +11,6 @@ from wandb_init import parser_init, wandb_init
 from models.Model import model_dice_bce
 from utils.Heads import ProjectionHead, SegmentationSHead, SegmentationMHead, get_teacher_momentum, get_teacher_temp
 from utils.Loss_dino import DINOLoss
-from torch.nn.utils import clip_grad_norm_
 import matplotlib.pyplot as plt
 import numpy as np
 import time

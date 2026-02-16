@@ -125,16 +125,11 @@ class Attention(nn.Module):
         
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, H, W, self.attention_dim)
+        out = F.scaled_dot_product_attention(q, k, v, dropout_p=self.attn_drop.p if self.training else 0.0)
+        x = out.transpose(1, 2).reshape(B, H, W, self.attention_dim)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x.permute(0, 3, 1, 2)
-
 
 class upsampling(nn.Module):
 
@@ -145,9 +140,6 @@ class upsampling(nn.Module):
         self.pre_norm = pre_norm(in_channels) if pre_norm else nn.Identity()
         self.pre_permute = pre_permute
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
-        #self.dilatedconv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding="same",dilation=3)
-        #self.dilatedconv = nn.Conv2d(in_channels, out_channels, kernel_size=3, dilation=3,padding="same") # 15x15
-
         self.norm = nn.LayerNorm(out_channels)
         #self.norm = nn.BatchNorm2d(out_channels)
 
@@ -193,9 +185,6 @@ class ConvBlock(nn.Module):
         x = self.drop_path(x)
         x = x.permute(0, 3, 1, 2)
         return x
-
-
-
 
 class SepConv(nn.Module):
     """ 
@@ -360,7 +349,6 @@ class Decoder(nn.Module):
 
             if i <3:
                 x = s[i] + x
-
         return x
 
     def forward(self, x,s):

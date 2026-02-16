@@ -158,12 +158,10 @@ class Attention(nn.Module):
         
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, self.head_dim).permute(2, 0, 3, 1, 4)
         q, k, v = qkv.unbind(0)   # make torchscript happy (cannot use tensor as tuple)
-
-        attn = (q @ k.transpose(-2, -1)) * self.scale
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, H, W, self.attention_dim)
+        
+        out = F.scaled_dot_product_attention(q, k, v, dropout_p=self.attn_drop.p if self.training else 0.0)
+        # [B, num_heads, N, head_dim] -> [B, N, num_heads, head_dim] -> [B, H, W, C]
+        x = out.transpose(1, 2).reshape(B, H, W, self.attention_dim)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x.permute(0, 3, 1, 2)
@@ -237,28 +235,28 @@ class SepConv(nn.Module):
 class Downsampling(nn.Module):
 
     def __init__(self, in_channels, out_channels, 
-        kernel_size, stride=1, padding=0, 
+        kernel_size, stride, padding=0, 
         pre_norm=None, pre_permute=False):
         super().__init__()
 
         self.pre_norm = pre_norm(in_channels) if pre_norm else nn.Identity()
         self.pre_permute = pre_permute
 
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=1, padding=padding)
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding)
         #self.dilatedconv = nn.Conv2d(in_channels, out_channels, kernel_size=3, dilation=2,padding="same") # 7x7 
         #self.dilatedconv = nn.Conv2d(in_channels, out_channels, kernel_size=3, dilation=3,padding="same") # 15x15
         #self.conv = nn.Conv2d(2*out_channels, out_channels, kernel_size=kernel_size, stride=1, padding=padding)
 
         #self.norm = nn.BatchNorm2d(out_channels)
         self.norm = nn.LayerNorm(out_channels)
-        self.down = nn.MaxPool2d(2,2)
+        #self.down = nn.MaxPool2d(2,2)
         self.act= nn.GELU()
 
     def forward(self, x):
         x = self.conv(x)
         x = self.norm(x.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         x = self.act(x)
-        x = self.down(x)
+        #x = self.down(x)
 
         return x
         

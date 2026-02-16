@@ -94,7 +94,6 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
 
         if op =="train":
 
-
             # Load full training paths
             train_im_path   = os.environ["ML_DATA_ROOT"] + foldernamepath + "train/images"
             train_mask_path = os.environ["ML_DATA_ROOT"] + foldernamepath + "train/masks"

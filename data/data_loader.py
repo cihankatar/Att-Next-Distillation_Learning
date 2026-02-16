@@ -170,7 +170,7 @@ class DinoMultiCropTransform:
 def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_box,shuffle,split_ratio,data):
 
     if data=='isic_2018_1':
-        foldernamepath="isic_2018_3/"
+        foldernamepath="isic_2018_1/"
         imageext="/*.jpg"
         maskext="/*.png"
     elif data == 'kvasir_1':

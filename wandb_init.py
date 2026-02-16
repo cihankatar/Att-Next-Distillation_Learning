@@ -30,7 +30,7 @@ def config_func(training_mode):
     elif training_mode == "supervised":
 
         configs={
-        "mode"              :"ssl_pretrained",
+        "mode"              :"supervised",
         "sslmode_modelname" :"Dino",
         "imnetpr"           :True,
         "bsize"             :8,
