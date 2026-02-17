@@ -180,16 +180,9 @@ def main():
         with torch.set_grad_enabled(training):
             for img, path, cropped_real_mask, student_augs, teacher_augs, pseudo_masks in loader:
 
-                if epoch_idx % 20 == 0:
-                    s_time = time.time()
-
                 student_feats = [student(im.to(device))[3] for im in student_augs]
                 student_pool  = [feat.mean(dim=(2, 3)) for feat in student_feats]
                 student_proj  = [F.normalize(student_head(p), dim=1) for p in student_pool]
-                
-                if epoch_idx % 20 == 0:
-                    e_time = time.time()
-                    print(f"Forward pass took {e_time - s_time:.4f} seconds") 
                 
                 with torch.no_grad():
 
@@ -207,7 +200,7 @@ def main():
                         seg_loss  = F.binary_cross_entropy_with_logits(seg_logits, seg_target)
                         loss_d    = loss_fn(student_proj, teacher_proj, teacher_temp)
                         if startwithcombinedloss:
-                            loss      = loss_d + seg_loss
+                            loss      = loss_d*weight + seg_loss
                         else:
                             loss      = loss_d + seg_loss if epoch_idx > 30 else loss_d  # add seg loss after 30 epochs
 
@@ -311,7 +304,7 @@ def main():
     for epoch in trange(config['epochs'], desc="Epochs"):
 
         # Training
-        weight = 1 
+        weight = 0.1 
         current_momentum = get_teacher_momentum(epoch, config['epochs'])
         total_loss, dino_loss, seg_loss, monitor_loss = run_epoch(train_loader, epoch_idx, current_momentum,weight,training=True )
         wandb.log({"Train Loss": total_loss, 
