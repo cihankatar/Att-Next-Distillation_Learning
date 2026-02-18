@@ -304,7 +304,7 @@ def main():
     for epoch in trange(config['epochs'], desc="Epochs"):
 
         # Training
-        weight = 0.1 
+        weight = 1
         current_momentum = get_teacher_momentum(epoch, config['epochs'])
         total_loss, dino_loss, seg_loss, monitor_loss = run_epoch(train_loader, epoch_idx, current_momentum,weight,training=True )
         wandb.log({"Train Loss": total_loss, 

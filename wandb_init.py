@@ -14,7 +14,7 @@ def config_func(training_mode):
         "sslmode_modelname" :"Dino",
         "imnetpr"           :False,
         "bsize"             :8, 
-        "epochs"            :201,
+        "epochs"            :202,
         "imsize"            :256,
         "lrate"             :0.0001,
         "aug"               :False,
