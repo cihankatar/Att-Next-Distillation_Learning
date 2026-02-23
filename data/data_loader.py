@@ -31,7 +31,7 @@ def data_transform():
 
     # --- COLOR ONLY (used after pseudo) ---
     color_transform_global = v2.Compose([
-        v2.RandomApply([v2.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+        v2.RandomApply([v2.ColorJitter(0.3, 0.3, 0.3, 0.0)], p=0.8),
         v2.RandomGrayscale(p=0.2),
         v2.RandomApply([v2.GaussianBlur(kernel_size=21, sigma=(0.1, 2.0))], p=0.5),
         #v2.RandomSolarize(threshold=0.5, p=0.2),
@@ -39,7 +39,7 @@ def data_transform():
     ])
     
     color_transform_local = v2.Compose([
-        v2.RandomApply([v2.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+        v2.RandomApply([v2.ColorJitter(0.3, 0.3, 0.3, 0.0)], p=0.8),
         v2.RandomGrayscale(p=0.2),
         v2.RandomApply([v2.GaussianBlur(kernel_size=21, sigma=(0.1, 2.0))], p=0.5),
         v2.Normalize(IMAGENET_MEAN, IMAGENET_STD)
