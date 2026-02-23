@@ -325,7 +325,7 @@ def main():
         if dinowithsegloss:
             print(f"Total Loss: {total_loss:.4f}, Segmentation Loss : {seg_loss:.4f}, Dino Loss: {(dino_loss):.4f}, Monitor Loss : {monitor_loss:.4f}")
         else:
-            print(f"Dino Loss: {total_loss:.4f}, Monitor Loss : {monitor_loss:.4f}")
+            print(f"Dino Loss: {dino_loss:.4f}, Monitor Loss : {monitor_loss:.4f}")
     
         print(f"Validation Cosine Similarity: {cos_sim:.4f}")
         print(f"Validation IoU: {val_iou:.4f}")

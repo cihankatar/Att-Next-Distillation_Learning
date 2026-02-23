@@ -12,65 +12,6 @@ from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
 import torchvision.transforms.functional as TF
 
-def pca_channel(img, gray):
-    """
-    Apply PCA to reduce multi-channel image (2 or 3 channels) to 1 channel.
-    Ensure PCA direction aligns with reference gray image (same bright/dark orientation).
-    """
-    h, w, c = img.shape
-    flat = img.reshape(-1, c).astype(np.float32)
-    
-    # PCA -> 1 bileşen
-    pca = PCA(n_components=1)
-    pc1 = pca.fit_transform(flat)
-    pc1 = (pc1 - pc1.min()) / (pc1.max() - pc1.min() + 1e-12)
-    pc1_img = pc1.reshape(h, w)
-    
-    # --- Gray ile yön hizalama ---
-    # g = gray.astype(np.float32)
-    # g = (g - g.min()) / (g.max() - g.min() + 1e-12)
-    
-    corr = np.corrcoef(pc1_img.ravel(), gray.ravel())[0, 1]
-    if corr < 0:
-        pc1_img = 1 - pc1_img  # yön ters ise düzelt
-        
-    return pc1_img
-
-def random_walker_pseudo_mask(img_tensor):
-    """
-    Convert a PyTorch tensor [3, H, W] to a 2D pseudo‐mask via Random Walker.
-    Steps:
-      1) Convert to grayscale
-      2) Compute Otsu threshold on grayscale -> get a rough binary
-      3) Define “foreground” and “background” seeds for Random Walker
-      4) Run Random Walker to refine the mask
-      5) Post‐process with small morphological operations
-    Returns:  torch.Tensor of shape [1, H, W], dtype=torch.float32, values 0.0 or 1.0
-    """
-    # (a) Convert to NumPy grayscale [H, W]
-    C,H,W = img_tensor.shape
-    img_np = img_tensor.permute(1, 2, 0).cpu().numpy()  
-    gray = 0.2989 * img_np[..., 0] + 0.5870 * img_np[..., 1] + 0.1140 * img_np[..., 2]
-
-    # (b) Rough Otsu threshold
-    thresh = filters.threshold_otsu(gray)
-    rough_binary = (gray < thresh).astype(np.uint8)  
-    delta = 0.10 * (gray.max() - gray.min())
-    markers = np.zeros_like(gray, dtype=np.int32)
-    markers[ gray <  (thresh - delta) ] = 1  
-    markers[ gray >  (thresh + delta) ] = 2  
-    markers[gray < 0.1] = 2 
-    # (d) Run Random Walker
-    rw_labels = seg.random_walker(gray, markers, beta=90, mode='bf')
-    
-    pseudo = (rw_labels == 1).astype(np.uint8)
-    # (e) Morphological cleanup: fill small holes, remove small objects
-    pseudo = morph.remove_small_holes(pseudo.astype(bool), area_threshold=32*32).astype(np.uint8)
-    pseudo = morph.remove_small_objects(pseudo.astype(bool), min_size=64).astype(np.uint8)
-
-    return torch.from_numpy(pseudo).unsqueeze(0).float()
-
-
 def data_transform():
     IMAGENET_MEAN = (0.485, 0.456, 0.406)
     IMAGENET_STD  = (0.229, 0.224, 0.225)
@@ -107,13 +48,12 @@ def data_transform():
     return DinoMultiCropTransform(
         crop_transform_global, color_transform_global,
         crop_transform_local, color_transform_local,
-        n_global=2, n_local=8
+        n_global=2, n_local=4
     )
-
 class DinoMultiCropTransform:
     def __init__(self, crop_transform_global, color_transform_global,
                  crop_transform_local, color_transform_local,
-                 n_global=2, n_local=8):
+                 n_global=2, n_local=4):
         
         self.crop_global = crop_transform_global
         self.color_global = color_transform_global
@@ -122,30 +62,33 @@ class DinoMultiCropTransform:
         self.n_global = n_global
         self.n_local = n_local
 
+        # v2.RandomErasing'i buradan kaldırdık çünkü koordinatları içeride manuel yöneteceğiz
+        self.erasing_p = 0.5
+        self.erasing_scale = (0.05, 0.1)
+        self.erasing_ratio = (0.3, 3.3)
+        
         print(f"--- DinoMultiCropTransform Initialized ---")
         print(f"n_global: {self.n_global}")
         print(f"n_local : {self.n_local}")
-        print(f"crop_transform_local: {self.crop_local}")
-        print(f"crop_transform_global: {self.crop_global}") 
-        print(f"color_transform_local: {self.color_local}")
-        print(f"color_transform_global: {self.color_global}")
         print(f"----------------------------------------")
 
-    def __call__(self, img,real_mask,pseudo_mask):
-        student_crops, teacher_crops,real_mask_crops = [],[], []
+    def __call__(self, img, real_mask, pseudo_mask):
+        student_crops, teacher_crops, real_mask_crops = [], [], []
         pseudo_masks = []
-
-        # global crops for teacher
+        
+        # 1. Pseudo Mask hizalaması (Döngü dışına aldık, performans için)
+        pseudo_mask_512 = TF.resize(pseudo_mask, size=(512, 512), interpolation=TF.InterpolationMode.NEAREST)
+        
+        # 2. Global crops for teacher (Maskesiz)
         for _ in range(self.n_global):
             cropped = self.crop_global(img)
             transformed = self.color_global(cropped)
             teacher_crops.append(transformed)
 
-        # global crops for student + pseudo masks + real mask 
+        # 3. Global crops for student + pseudo masks + real mask 
         for _ in range(self.n_global):
-
             i, j, h, w = v2.RandomResizedCrop.get_params(img, scale=(0.4, 1.0), ratio=(3.0/4.0, 4.0/3.0))
-            pseudo_mask_512 = TF.resize(pseudo_mask, size=(512, 512), interpolation=TF.InterpolationMode.NEAREST)
+            
             crop_img = TF.resized_crop(img, i, j, h, w, size=(256, 256), antialias=True)
             crop_mask = TF.resized_crop(real_mask, i, j, h, w, size=(256, 256), interpolation=TF.InterpolationMode.NEAREST)
             crop_pseudo = TF.resized_crop(pseudo_mask_512, i, j, h, w, size=(256, 256), interpolation=TF.InterpolationMode.NEAREST)
@@ -155,20 +98,59 @@ class DinoMultiCropTransform:
                 crop_mask = TF.hflip(crop_mask)
                 crop_pseudo = TF.hflip(crop_pseudo)
 
-            transformed_img = self.color_global(crop_img) # Color transform sadece görüntüye!
-            student_crops.append(transformed_img)
-            #pseudo_mask = random_walker_pseudo_mask(crop_img)  # [1, H, W], 0 or 1
-            pseudo_masks.append(crop_pseudo)
-            real_mask_crops.append(crop_mask)
+            # Tensor Dönüşümü (Erase ve Color işlemleri için zorunludur)
+            if not isinstance(crop_img, torch.Tensor):
+                crop_img = TF.to_tensor(crop_img)
+            if not isinstance(crop_mask, torch.Tensor):
+                crop_mask = TF.to_tensor(crop_mask)
+            if not isinstance(crop_pseudo, torch.Tensor):
+                crop_pseudo = TF.to_tensor(crop_pseudo)
 
-        # local crops for student
+            # Sadece görüntüye renk transformu
+            transformed_img = self.color_global(crop_img) 
+            
+            # ==============================================================
+            # TAM SENKRONİZE MASKELEME (ERASING) İŞLEMİ
+            # ==============================================================
+            if torch.rand(1) < self.erasing_p:
+                c, h_img, w_img = transformed_img.shape
+                area = h_img * w_img
+                
+                # Rastgele boyutları belirliyoruz
+                target_area = area * torch.empty(1).uniform_(self.erasing_scale[0], self.erasing_scale[1]).item()
+                aspect_ratio = torch.empty(1).uniform_(self.erasing_ratio[0], self.erasing_ratio[1]).item()
+                
+                h_erase = int(round((target_area * aspect_ratio) ** 0.5))
+                w_erase = int(round((target_area / aspect_ratio) ** 0.5))
+                
+                if h_erase < h_img and w_erase < w_img:
+                    # Rastgele başlangıç koordinatlarını belirliyoruz
+                    i_erase = torch.randint(0, h_img - h_erase + 1, size=(1,)).item()
+                    j_erase = torch.randint(0, w_img - w_erase + 1, size=(1,)).item()
+                    
+                    # 1. Görüntüye Rastgele Gürültü (Random Noise) Basıyoruz
+                    noise = torch.rand(c, h_erase, w_erase)
+                    transformed_img = TF.erase(transformed_img, i_erase, j_erase, h_erase, w_erase, v=torch.tensor(0.0))
+                    
+                    # 2. Gerçek ve Sahte Maskeye Siyah (0) Basıyoruz (Aynı Koordinatlar!)
+                    crop_mask = TF.erase(crop_mask, i_erase, j_erase, h_erase, w_erase, v=torch.tensor(0.0))
+                    crop_pseudo = TF.erase(crop_pseudo, i_erase, j_erase, h_erase, w_erase, v=torch.tensor(0.0))
+            # ==============================================================
+
+            # Listelere Ekleme
+            student_crops.append(transformed_img)
+            real_mask_crops.append(crop_mask)
+            pseudo_masks.append(crop_pseudo)
+
+        # 4. Local crops for student
         for _ in range(self.n_local):
             cropped = self.crop_local(img)
             transformed = self.color_local(cropped)
             student_crops.append(transformed)
 
-        return img, real_mask_crops,student_crops, teacher_crops, pseudo_masks  # 
-
+        return img, real_mask_crops, student_crops, teacher_crops, pseudo_masks
+    
+    
 def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_box,shuffle,split_ratio,data):
 
     if data=='isic_2018_1':
