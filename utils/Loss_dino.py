@@ -9,6 +9,37 @@ from visualization import *
 #import gudhi as gd
 
 
+# class DINOLoss(nn.Module):
+#     def __init__(self, out_dim=4096, student_temp=0.1, center_momentum=0.9):
+#         super().__init__()
+#         self.student_temp = student_temp
+#         self.center_momentum = center_momentum
+#         self.register_buffer("center", torch.zeros(1, out_dim))
+
+#     def forward(self, student_outputs, teacher_outputs,teacher_temp):  
+        
+#         total_loss, n_loss_terms = 0.0, 0
+
+#         # Teacher softmax with centering & temperature
+#         teacher_logits = [(t - self.center.to(t.device)) / teacher_temp for t in teacher_outputs]
+#         teacher_probs = [F.softmax(logits, dim=-1).detach() for logits in teacher_logits]
+
+#         # Student scaled logits
+#         student_logits = [s / self.student_temp for s in student_outputs]
+
+#         for t_out in teacher_probs:
+#             for s_log in student_logits:
+#                 loss = torch.sum(-t_out * F.log_softmax(s_log, dim=-1), dim=-1).mean()
+#                 total_loss += loss
+#                 n_loss_terms += 1
+#         # Update center (only from teacher views)
+#         batch_center = torch.cat(teacher_outputs, dim=0).mean(dim=0, keepdim=True)
+#         with torch.no_grad():
+#             self.center = self.center.to(batch_center.device) * self.center_momentum + \
+#                         (1 - self.center_momentum) * batch_center
+
+#         return total_loss / n_loss_terms
+    
 class DINOLoss(nn.Module):
     def __init__(self, out_dim=4096, student_temp=0.1, center_momentum=0.9):
         super().__init__()
@@ -16,27 +47,97 @@ class DINOLoss(nn.Module):
         self.center_momentum = center_momentum
         self.register_buffer("center", torch.zeros(1, out_dim))
 
-    def forward(self, student_outputs, teacher_outputs,teacher_temp):  
-        
+    def forward(self, student_outputs, teacher_outputs, teacher_temp):
         total_loss, n_loss_terms = 0.0, 0
 
-        # Teacher softmax with centering & temperature
+        # teacher_outputs: list of [B, T, D]  OR [B, D]
+        # center: [1, D] -> broadcastable
         teacher_logits = [(t - self.center.to(t.device)) / teacher_temp for t in teacher_outputs]
-        teacher_probs = [F.softmax(logits, dim=-1).detach() for logits in teacher_logits]
+        teacher_probs  = [F.softmax(logits, dim=-1).detach() for logits in teacher_logits]
 
-        # Student scaled logits
         student_logits = [s / self.student_temp for s in student_outputs]
 
         for t_out in teacher_probs:
             for s_log in student_logits:
+                # token-wise CE: sum over D -> [B,T] then mean over (B,T)
                 loss = torch.sum(-t_out * F.log_softmax(s_log, dim=-1), dim=-1).mean()
                 total_loss += loss
                 n_loss_terms += 1
-        # Update center (only from teacher views)
-        batch_center = torch.cat(teacher_outputs, dim=0).mean(dim=0, keepdim=True)
+
+        # ---- FIXED center update for token case ----
+        # flatten all teacher views over (B,T) so center stays [1,D]
         with torch.no_grad():
+            t_cat = torch.cat(teacher_outputs, dim=0)     # [B*V, T, D] or [B*V, D]
+            if t_cat.dim() == 3:
+                t_flat = t_cat.reshape(-1, t_cat.size(-1))  # [(B*V*T), D]
+            else:
+                t_flat = t_cat                               # [(B*V), D]
+            batch_center = t_flat.mean(dim=0, keepdim=True)   # [1, D]
+
             self.center = self.center.to(batch_center.device) * self.center_momentum + \
-                        (1 - self.center_momentum) * batch_center
+                          (1 - self.center_momentum) * batch_center
+
+        return total_loss / n_loss_terms
+    
+    
+class DenseDINOLoss(nn.Module):
+    def __init__(self, out_dim=4096, student_temp=0.1, center_momentum=0.9):
+        super().__init__()
+        self.student_temp = student_temp
+        self.center_momentum = center_momentum
+        self.register_buffer("center", torch.zeros(1, out_dim))
+
+    def forward(self, student_outputs, teacher_outputs, teacher_temp):
+        """
+        student_outputs: list of tensors, each [B, HW, C]
+        teacher_outputs: list of tensors, each [B, HW, C]
+        """
+
+        total_loss = 0.0
+        n_loss_terms = 0
+
+        # -------- TEACHER --------
+        teacher_logits = [
+            (t - self.center.to(t.device)) / teacher_temp
+            for t in teacher_outputs
+        ]
+
+        teacher_probs = [
+            F.softmax(logits, dim=-1).detach()
+            for logits in teacher_logits
+        ]
+
+        # -------- STUDENT --------
+        student_logits = [
+            s / self.student_temp
+            for s in student_outputs
+        ]
+
+        # -------- PATCH-WISE CE --------
+        for t_out in teacher_probs:
+            for s_log in student_logits:
+
+                # shape: [B, HW, C]
+                loss = torch.sum(
+                    -t_out * F.log_softmax(s_log, dim=-1),
+                    dim=-1
+                )  # -> [B, HW]
+
+                loss = loss.mean()  # average over batch & patches
+                total_loss += loss
+                n_loss_terms += 1
+
+        # -------- CENTER UPDATE --------
+        with torch.no_grad():
+            batch_center = torch.cat(
+                [t.reshape(-1, t.shape[-1]) for t in teacher_outputs],
+                dim=0
+            ).mean(dim=0, keepdim=True)
+
+            self.center = (
+                self.center.to(batch_center.device) * self.center_momentum
+                + (1 - self.center_momentum) * batch_center
+            )
 
         return total_loss / n_loss_terms
 

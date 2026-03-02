@@ -10,11 +10,24 @@ import torch.nn.functional as F
 from wandb_init import parser_init, wandb_init
 from models.Model import model_dice_bce
 from utils.Heads import ProjectionHead, SegmentationSHead, SegmentationMHead, get_teacher_momentum, get_teacher_temp
-from utils.Loss_dino import DINOLoss
+from utils.Loss_dino import DINOLoss,DenseDINOLoss
 import matplotlib.pyplot as plt
 import numpy as np
 import time
 
+def grid_tokens(feat, k):
+    # feat: [B,C,H,W] -> [B, T, C] (T=k*k)
+    x = F.adaptive_avg_pool2d(feat, (k, k))   # [B,C,k,k]
+    x = x.flatten(2).transpose(1, 2)          # [B,T,C]
+    return x
+
+def project_tokens(tokens, head):
+    # tokens: [B,T,C] -> [B,T,D]
+    B, T, C = tokens.shape
+    x = tokens.reshape(B*T, C)
+    x = head(x)
+    x = F.normalize(x, dim=-1)
+    return x.view(B, T, -1)
 
 def compute_batch_iou(pred_logits, target_masks):
     """
@@ -85,7 +98,7 @@ def main():
 
     data, training_mode, op, dinowithsegloss, startwithcombinedloss = 'isic_2018_1', "ssl", "train",True,True
 
-    best_loss   = float("inf")
+    best_iou   = 0.0
     device      = using_device()
     folder_path = setup_paths(data)
     args, res   = parser_init("segmentation task", op, training_mode)
@@ -93,7 +106,6 @@ def main():
     res         = "["+res+"]" + f"_segloss_{dinowithsegloss}_combinedloss_{startwithcombinedloss}"
 
     config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss, startwithcombinedloss)
-    args.suffle         = False
     print("train_im_path", os.environ["ML_DATA_ROOT"]+"train/images") 
     # Data Loaders
     def create_loader(operation):
@@ -107,12 +119,9 @@ def main():
     val_loader      = create_loader(args.op)
     args.op         = "train"
     
+    model           = model_dice_bce().to(device)
 
-    # Student & Teacher modeli
-    #model     = UNET(1).to(device)
-    model     = model_dice_bce().to(device)
-
-    s_head    = SegmentationSHead().to(device)
+    s_head          = SegmentationSHead().to(device)
     monitor_head    = SegmentationMHead().to(device)
 
     student = model.encoder
@@ -156,7 +165,7 @@ def main():
 
     # Training and Validation Loops
 
-    def run_epoch(loader, epoch_idx, momentum, weigt,training=True):
+    def run_epoch(loader, epoch_idx, momentum, weight,training=True):
         epoch_loss  = 0.0
         num_batches = 0
         epoch_val_loss, epoch_seg_loss,epoch_monitor_loss, epoch_iou, epoch_dino_loss = 0.0, 0.0, 0.0, 0.0, 0.0
@@ -180,19 +189,32 @@ def main():
         with torch.set_grad_enabled(training):
             for img, path, cropped_real_mask, student_augs, teacher_augs, pseudo_masks in loader:
 
-                student_feats = [student(im.to(device))[3] for im in student_augs]
-                student_pool  = [feat.mean(dim=(2, 3)) for feat in student_feats]
-                student_proj  = [F.normalize(student_head(p), dim=1) for p in student_pool]
-                
+                # student_feats = [student(im.to(device))[3] for im in student_augs]
+                # student_pool  = [feat.mean(dim=(2, 3)) for feat in student_feats]
+                # student_proj  = [F.normalize(student_head(p), dim=1) for p in student_pool]
+
+                # with torch.no_grad():
+
+                #     teacher_feats = [teacher(im.to(device))[3] for im in teacher_augs]
+                #     teacher_pool  = [feat.mean(dim=(2, 3)) for feat in teacher_feats]
+                #     teacher_proj  = [F.normalize(teacher_head(p), dim=1) for p in teacher_pool]
+
+
+                k = 8  # 64 token
+
+                student_feats = [student(im.to(device))[3] for im in student_augs]  # each [B,512,H,W]
+                student_tok   = [grid_tokens(f, k) for f in student_feats]         # each [B,16,512]
+                student_proj  = [project_tokens(t, student_head) for t in student_tok]  # each [B,16,D]
+
                 with torch.no_grad():
-
                     teacher_feats = [teacher(im.to(device))[3] for im in teacher_augs]
-                    teacher_pool  = [feat.mean(dim=(2, 3)) for feat in teacher_feats]
-                    teacher_proj  = [F.normalize(teacher_head(p), dim=1) for p in teacher_pool]
+                    teacher_tok   = [grid_tokens(f, k) for f in teacher_feats]
+                    teacher_proj  = [project_tokens(t, teacher_head) for t in teacher_tok]
 
-                seg_logits      = s_head(student_feats[0])              # Shape: [B, 512, 8, 8]
-                seg_target      = pseudo_masks[0].to(device).type_as(seg_logits)              # Shape: [B, 1, 8, 8]
-                real_seg_target = cropped_real_mask[0].to(device).type_as(seg_logits)              # Shape: [B, 1, 8, 8]
+
+                seg_logits      = s_head(student_feats[0])              
+                seg_target      = pseudo_masks[0].to(device).type_as(seg_logits)            
+                real_seg_target = cropped_real_mask[0].to(device).type_as(seg_logits)           
 
                 # Compute segmentation loss
                 if training:
@@ -304,7 +326,7 @@ def main():
     for epoch in trange(config['epochs'], desc="Epochs"):
 
         # Training
-        weight = 0.1
+        weight = 1
         current_momentum = get_teacher_momentum(epoch, config['epochs'])
         total_loss, dino_loss, seg_loss, monitor_loss = run_epoch(train_loader, epoch_idx, current_momentum,weight,training=True )
         wandb.log({"Train Loss": total_loss, 
@@ -330,20 +352,11 @@ def main():
         print(f"Validation Cosine Similarity: {cos_sim:.4f}")
         print(f"Validation IoU: {val_iou:.4f}")
 
+        if val_iou > best_iou:
+            best_iou = val_iou
+            torch.save(student.state_dict(), checkpoint_path)
+            print(f"Best model saved")
 
-        # Save best model
-
-        if epoch_idx>30:
-            if dinowithsegloss:
-                if total_loss < best_loss:
-                    best_loss = total_loss
-                    torch.save(student.state_dict(), checkpoint_path)
-                    print(f"Best model saved")
-
-            elif dino_loss >= best_loss:
-                    best_loss = dino_loss
-                    torch.save(student.state_dict(), checkpoint_path)
-                    print(f"Best model saved")
     wandb.finish()
 
 if __name__ == "__main__":
