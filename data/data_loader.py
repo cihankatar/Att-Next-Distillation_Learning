@@ -18,13 +18,13 @@ def data_transform():
 
     # --- CROP ONLY (used before RW) ---
     crop_transform_global = v2.Compose([
-        v2.RandomResizedCrop(256, scale=(0.4, 1.0), antialias=True),
+        v2.RandomResizedCrop(256, scale=(0.4, 1.0), ratio=(3/4, 4/3), antialias=True),
         v2.RandomHorizontalFlip(p=0.5),
         v2.ToTensor()
     ])
-    
+
     crop_transform_local = v2.Compose([
-        v2.RandomResizedCrop(128, scale=(0.1, 0.4), antialias=True),
+        v2.RandomResizedCrop(128, scale=(0.1, 0.4), ratio=(3/4, 4/3), antialias=True),
         v2.RandomHorizontalFlip(p=0.5),
         v2.ToTensor()
     ])
@@ -33,7 +33,7 @@ def data_transform():
     color_transform_global = v2.Compose([
         v2.RandomApply([v2.ColorJitter(0.3, 0.3, 0.3, 0.0)], p=0.8),
         v2.RandomGrayscale(p=0.2),
-        v2.RandomApply([v2.GaussianBlur(kernel_size=21, sigma=(0.1, 2.0))], p=0.5),
+        v2.RandomApply([v2.GaussianBlur(kernel_size=21, sigma=(0.1, 2.0))], p=0.3),
         #v2.RandomSolarize(threshold=0.5, p=0.2),
         v2.Normalize(IMAGENET_MEAN, IMAGENET_STD)
     ])
@@ -41,7 +41,7 @@ def data_transform():
     color_transform_local = v2.Compose([
         v2.RandomApply([v2.ColorJitter(0.3, 0.3, 0.3, 0.0)], p=0.8),
         v2.RandomGrayscale(p=0.2),
-        v2.RandomApply([v2.GaussianBlur(kernel_size=21, sigma=(0.1, 2.0))], p=0.5),
+        v2.RandomApply([v2.GaussianBlur(kernel_size=11, sigma=(0.1, 2.0))], p=0.5),
         v2.Normalize(IMAGENET_MEAN, IMAGENET_STD)
     ])
 
@@ -109,33 +109,7 @@ class DinoMultiCropTransform:
             # Sadece görüntüye renk transformu
             transformed_img = self.color_global(crop_img) 
             
-            # ==============================================================
-            # TAM SENKRONİZE MASKELEME (ERASING) İŞLEMİ
-            # ==============================================================
-            if torch.rand(1) < self.erasing_p:
-                c, h_img, w_img = transformed_img.shape
-                area = h_img * w_img
-                
-                # Rastgele boyutları belirliyoruz
-                target_area = area * torch.empty(1).uniform_(self.erasing_scale[0], self.erasing_scale[1]).item()
-                aspect_ratio = torch.empty(1).uniform_(self.erasing_ratio[0], self.erasing_ratio[1]).item()
-                
-                h_erase = int(round((target_area * aspect_ratio) ** 0.5))
-                w_erase = int(round((target_area / aspect_ratio) ** 0.5))
-                
-                if h_erase < h_img and w_erase < w_img:
-                    # Rastgele başlangıç koordinatlarını belirliyoruz
-                    i_erase = torch.randint(0, h_img - h_erase + 1, size=(1,)).item()
-                    j_erase = torch.randint(0, w_img - w_erase + 1, size=(1,)).item()
-                    
-                    # 1. Görüntüye Rastgele Gürültü (Random Noise) Basıyoruz
-                    noise = torch.rand(c, h_erase, w_erase)
-                    transformed_img = TF.erase(transformed_img, i_erase, j_erase, h_erase, w_erase, v=torch.tensor(0.0))
-                    
-                    # 2. Gerçek ve Sahte Maskeye Siyah (0) Basıyoruz (Aynı Koordinatlar!)
-                    crop_mask = TF.erase(crop_mask, i_erase, j_erase, h_erase, w_erase, v=torch.tensor(0.0))
-                    crop_pseudo = TF.erase(crop_pseudo, i_erase, j_erase, h_erase, w_erase, v=torch.tensor(0.0))
-            # ==============================================================
+
 
             # Listelere Ekleme
             student_crops.append(transformed_img)
