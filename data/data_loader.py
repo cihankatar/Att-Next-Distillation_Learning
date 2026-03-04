@@ -63,7 +63,7 @@ class DinoMultiCropTransform:
         self.n_local = n_local
 
         # v2.RandomErasing'i buradan kaldırdık çünkü koordinatları içeride manuel yöneteceğiz
-        self.erasing_p = 0.5
+        self.erasing_p = 0.0
         self.erasing_scale = (0.05, 0.1)
         self.erasing_ratio = (0.3, 3.3)
         
