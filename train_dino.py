@@ -221,10 +221,7 @@ def main():
                     if dinowithsegloss:
                         seg_loss  = F.binary_cross_entropy_with_logits(seg_logits, seg_target)
                         loss_d    = loss_fn(student_proj, teacher_proj, teacher_temp)
-                        if startwithcombinedloss:
-                            loss      = loss_d*weight + seg_loss
-                        else:
-                            loss      = loss_d + seg_loss if epoch_idx > 30 else loss_d  # add seg loss after 30 epochs
+                        loss      = loss_d*weight + seg_loss
 
                         optimizer.zero_grad()
                         loss.backward()
@@ -278,6 +275,7 @@ def main():
                         pseudo_mask  = seg_target[b_idx].permute(1,2,0).detach().cpu().numpy()
                         if dinowithsegloss:
                             seg_logit    = seg_logits[b_idx].permute(1,2,0).detach().cpu().numpy()
+                            seg_pred     = (torch.sigmoid(seg_logits[b_idx]) > 0.5).float().permute(1,2,0).detach().cpu().numpy()
 
                         student_heatmap = featuremap_to_heatmap(student_feat)
                         teacher_heatmap = featuremap_to_heatmap(teacher_feat)
@@ -307,6 +305,7 @@ def main():
                             "Teacher Output Heatmap": wandb.Image(teacher_heatmap),
                             "Monitor Head Prediction prob": wandb.Image(prob.detach().cpu().numpy()) ,
                             "Auxillary Seg Prediction prob": wandb.Image(seg_logit) if dinowithsegloss else None,
+                            "Auxillary Seg Prediction ": wandb.Image(seg_pred) if dinowithsegloss else None,
                             "Monitor Head Prediction Mask": wandb.Image(pred_mask, caption=f"IoU:{iou:.4f}"),
                             "Pseudo Segmentation Mask": wandb.Image(pseudo_mask, caption=f"IoU with Real Mask: {iou_pseudo:.4f}"),
                         })
