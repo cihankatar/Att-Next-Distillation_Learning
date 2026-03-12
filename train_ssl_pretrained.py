@@ -5,7 +5,7 @@ from tqdm import tqdm, trange
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from data.data_loader_ssl_pretrained import loader
-from utils.Loss_topo import Dice_CE_Loss
+from utils.Loss_dino import Dice_CE_Loss
 from augmentation.Augmentation import Cutout, cutmix
 from wandb_init import parser_init, wandb_init
 from utils.metrics import calculate_metrics
