@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from data.data_loader_ssl_pretrained import loader
 from utils.Loss_topo import Dice_CE_Loss
 from augmentation.Augmentation import Cutout, cutmix
-from wandb_init4 import parser_init, wandb_init
+from wandb_init import parser_init, wandb_init
 from utils.metrics import calculate_metrics
 from models.Model import model_dice_bce
 
@@ -37,7 +37,7 @@ def setup_paths(data):
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op,addtopoloss = 'isic_2018_1', "ssl_pretrained", "train",False
+    data, training_mode, op, dinowithsegloss, startwithcombinedloss = 'isic_2018_1', "ssl_pretrained", "train",True,True
 
     best_valid_loss   = float("inf")
     device      = using_device()
@@ -47,9 +47,9 @@ def main():
     res           = " ".join(res)
     res           = "["+res+"]"
     ssl_config    = " ".join(ssl_config)
-    ssl_config    = "["+ssl_config+"]"
+    ssl_config    = "["+ssl_config+"]"+ f"_segloss_{dinowithsegloss}_combinedloss_{startwithcombinedloss}"
 
-    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data)
+    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss, startwithcombinedloss)
 
     # Data Loaders
     def create_loader(operation):
@@ -71,14 +71,11 @@ def main():
     scheduler = CosineAnnealingLR(optimizer, config['epochs'], eta_min=config['learningrate'] / 10)
     loss_fn   = Dice_CE_Loss()
     
-    if addtopoloss:
-        from utils.Loss_topo import Topological_Loss
-        topo_loss_fn = Topological_Loss(lam=0.1).to(device)
-
     print(f"Training on {len(train_loader) * args.bsize} images. Saving checkpoints to {folder_path}")
     print('Train loader transform',train_loader.dataset.tr)
     print('Val loader transform',val_loader.dataset.tr)
     print(f"model config : {checkpoint_path}")
+    print(f"encoder config : {checkpoint_path_ssl_read}")
 
     # Training and Validation Loops
     def run_epoch(loader, training=True):
@@ -108,12 +105,7 @@ def main():
 
                 loss_ = loss_fn.Dice_BCE_Loss(out, labels)
 
-                if addtopoloss:
-                    topo_loss = topo_loss_fn(out, labels)
-                    total_loss = loss_ + topo_loss
-                    epoch_topo_loss += topo_loss.item()
-                else:
-                    total_loss = loss_
+                total_loss = loss_
 
                 epoch_loss += total_loss.item()
                 epoch_loss_ += loss_.item()

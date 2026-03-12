@@ -33,7 +33,7 @@ def data_transform():
     color_transform_global = v2.Compose([
         v2.RandomApply([v2.ColorJitter(0.3, 0.3, 0.3, 0.0)], p=0.8),
         v2.RandomGrayscale(p=0.2),
-        v2.RandomApply([v2.GaussianBlur(kernel_size=21, sigma=(0.1, 2.0))], p=0.3),
+        v2.RandomApply([v2.GaussianBlur(kernel_size=17, sigma=(0.1, 2.0))], p=0.3),
         #v2.RandomSolarize(threshold=0.5, p=0.2),
         v2.Normalize(IMAGENET_MEAN, IMAGENET_STD)
     ])
@@ -41,19 +41,19 @@ def data_transform():
     color_transform_local = v2.Compose([
         v2.RandomApply([v2.ColorJitter(0.3, 0.3, 0.3, 0.0)], p=0.8),
         v2.RandomGrayscale(p=0.2),
-        v2.RandomApply([v2.GaussianBlur(kernel_size=11, sigma=(0.1, 2.0))], p=0.5),
+        v2.RandomApply([v2.GaussianBlur(kernel_size=17, sigma=(0.1, 2.0))], p=0.5),
         v2.Normalize(IMAGENET_MEAN, IMAGENET_STD)
     ])
 
     return DinoMultiCropTransform(
         crop_transform_global, color_transform_global,
         crop_transform_local, color_transform_local,
-        n_global=2, n_local=8
+        n_global=2, n_local=4
     )
 class DinoMultiCropTransform:
     def __init__(self, crop_transform_global, color_transform_global,
                  crop_transform_local, color_transform_local,
-                 n_global=2, n_local=8):
+                 n_global=2, n_local=4):
         
         self.crop_global = crop_transform_global
         self.color_global = color_transform_global
