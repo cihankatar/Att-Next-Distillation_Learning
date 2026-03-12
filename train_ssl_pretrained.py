@@ -37,7 +37,7 @@ def setup_paths(data):
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op, dinowithsegloss, startwithcombinedloss = 'isic_2018_1', "ssl_pretrained", "train",True,True
+    data, training_mode, op, dinowithsegloss, startwithcombinedloss = 'isic_2018_1', "ssl_pretrained", "train",False,False
 
     best_valid_loss   = float("inf")
     device      = using_device()
