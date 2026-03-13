@@ -11,7 +11,9 @@ from wandb_init import parser_init, wandb_init
 from utils.metrics import calculate_metrics
 from models.Model import model_dice_bce
 import time
-
+import os, sys
+print("PYTHON:", sys.executable)
+print("ML_DATA_ROOT:", os.environ.get("ML_DATA_ROOT"))
 def using_device():
     """Set and print the device used for training."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
