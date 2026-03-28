@@ -64,15 +64,6 @@ if __name__ == "__main__":
 
     print(f"testing with {len(test_loader)*args.bsize} images")
 
-    # try:
-    #     if torch.cuda.is_available():
-    #         model.load_state_dict(torch.load(checkpoint_path))
-    #     else: 
-    #         model.load_state_dict(torch.load(checkpoint_path, map_location=torch.device('cpu')))
-
-    # except:
-    #      raise Exception("******* No Checkpoint Path  *********")
-    
     metrics_score = [ 0.0, 0.0, 0.0, 0.0, 0.0]
     idx=0
 

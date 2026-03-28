@@ -2,180 +2,121 @@ import torch
 import torch.nn as nn
 import time
 
-class conv_block(nn.Module):
+
+class ConvBlock(nn.Module):
     def __init__(self, in_c, out_c):
         super().__init__()
-        
-        self.conv_block=nn.Sequential(nn.Conv2d(in_c, out_c, kernel_size=3, padding=1),
-                                     nn.BatchNorm2d(out_c),
-                                     nn.ReLU(),
-                                     nn.Conv2d(out_c, out_c, kernel_size=3, padding=1),
-                                     nn.BatchNorm2d(out_c),
-                                     nn.ReLU())
-        
-        self.pool = nn.MaxPool2d((2, 2))
-       
-    def forward(self, inputs):
-        conv_block_out=self.conv_block(inputs)
+        self.block = nn.Sequential(
+            nn.Conv2d(in_c, out_c, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_c),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_c, out_c, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_c),
+            nn.ReLU(inplace=True),
+        )
 
-        return conv_block_out
+    def forward(self, x):
+        return self.block(x)
 
-class down(nn.Module):
+
+class Down(nn.Module):
     def __init__(self, in_c, out_c):
         super().__init__()
+        self.conv = ConvBlock(in_c, out_c)
+        self.pool = nn.MaxPool2d(2)
 
-        self.conv = conv_block(in_c, out_c)
-        self.pool = nn.MaxPool2d((2, 2))
-        self.conv_pool=nn.Sequential(nn.Conv2d(out_c, out_c, kernel_size=3, padding=1),
-                                nn.BatchNorm2d(out_c),
-                                nn.ReLU())
-
-    def forward(self, inputs):
-        conv_block_out=self.conv(inputs)
-        encoder_output = self.pool(conv_block_out)
-        
-
-        return conv_block_out, encoder_output
+    def forward(self, x):
+        skip = self.conv(x)
+        x = self.pool(skip)
+        return skip, x
 
 
-class up(nn.Module):
-    def __init__(self, in_c, out_c):
+class Up(nn.Module):
+    def __init__(self, in_c, skip_c, out_c):
         super().__init__()
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
-        self.up   = nn.Sequential(nn.Conv2d(in_c, out_c, kernel_size=3, stride=1,padding=1),  nn.BatchNorm2d(out_c), nn.ReLU())
-        self.conv = conv_block(out_c+out_c, out_c)
+        self.up_conv = nn.Sequential(
+            nn.Conv2d(in_c, out_c, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_c),
+            nn.ReLU(inplace=True),
+        )
+        self.conv = ConvBlock(out_c + skip_c, out_c)
 
-    def forward(self, inputs, skip):
-        conv_t_out = self.up(self.upsample(inputs))
-        concat = torch.concat((conv_t_out,skip),dim=1)
-        decoder_output = self.conv(concat)
-        return decoder_output
-    
+    def forward(self, x, skip):
+        x = self.upsample(x)
+        x = self.up_conv(x)
+        x = torch.cat([x, skip], dim=1)
+        x = self.conv(x)
+        return x
 
-class UNET(nn.Module):
-    def __init__(self,n_classes):
+
+class Encoder(nn.Module):
+    def __init__(self, in_channels=3, features=(64, 128, 256, 512), bottleneck_channels=1024):
         super().__init__()
-        
-        self.n_classes = n_classes
-        #sigmoid_f      = nn.Sigmoid()
-        #softmax_f      = nn.Softmax()
 
-        size_en=[3,64,128,256,512]
-        self.encoder_blocks = nn.ModuleList([down(in_f, out_f) for in_f, out_f in zip(size_en,size_en[1:])])
+        self.down1 = Down(in_channels, features[0])
+        self.down2 = Down(features[0], features[1])
+        self.down3 = Down(features[1], features[2])
+        self.down4 = Down(features[2], features[3])
 
-        self.b = conv_block(512, 1024)
+        self.bottleneck = ConvBlock(features[3], bottleneck_channels)
 
-        size_dec=[1024,512,256,128,64]
-        self.decoder_blocks = nn.ModuleList([up(in_f, out_f) for in_f, out_f in zip(size_dec,size_dec[1:])])
+    def forward(self, x):
+        s1, x = self.down1(x)   # 64, 128x128 if input 256
+        s2, x = self.down2(x)   # 128, 64x64
+        s3, x = self.down3(x)   # 256, 32x32
+        s4, x = self.down4(x)   # 512, 16x16
+        b = self.bottleneck(x)  # 1024, 16x16 if input was 256 after 4 pools -> actually 16x16
 
-        
-        if self.n_classes > 1:
-
-            self.outputs  = nn.Conv2d(64, 2, kernel_size=1, padding=0)
-            #self.outputs = softmax_f(self.outputs)
-        else:
-            self.outputs  = nn.Conv2d(64, 1, kernel_size=1, padding=0)
-            #self.outputs  = sigmoid_f(self.outputs)
-
-    def forward(self, inputs):                      # 1x  3 x 128 x 128
-        
-        s1, p1 = self.encoder_blocks[0](inputs)     # 1x  64 x 128x128 ,  64  x 64x64
-        s2, p2 = self.encoder_blocks[1](p1)         # 1x 128 x 64x64   ,  128 x 32x32
-        s3, p3 = self.encoder_blocks[2](p2)         # 1x 256 x 32x32   ,  256 x 16x16
-        s4, p4 = self.encoder_blocks[3](p3)         # 1x 512 x 16x16   ,  512 x 8x8
-
-        b = self.b(p4)                              # 1x 1024 x 8x8
-
-        d1 = self.decoder_blocks[0](b, s4)          # 1x 512 x  16x16
-        d2 = self.decoder_blocks[1](d1, s3)         # 1x 256 x  32x32
-        d3 = self.decoder_blocks[2](d2, s2)         # 1x 128 x  64x64
-        d4 = self.decoder_blocks[3](d3, s1)         # 1x  64 x 128x128
-
-        outputs = self.outputs(d4)                  # 1   64 x 128x128
+        skips = [s1, s2, s3, s4]
+        return b, skips
 
 
-        # import matplotlib.pyplot as plt 
-        # import numpy as np
-        
-        # image =inputs[0,1]
-        
-        # enc1  = s1[1,1]
-        # enc2  = s2[1,1]
-        # enc3  = s3[1,1]
-        # enc4  = s4[1,1]
+class Decoder(nn.Module):
+    def __init__(self, out_classes=1, bottleneck_channels=1024, features=(64, 128, 256, 512)):
+        super().__init__()
 
-        # bottle  = b[1,512]
+        self.up1 = Up(bottleneck_channels, features[3], features[3])  # 1024 + 512 -> 512
+        self.up2 = Up(features[3], features[2], features[2])          # 512 + 256 -> 256
+        self.up3 = Up(features[2], features[1], features[1])          # 256 + 128 -> 128
+        self.up4 = Up(features[1], features[0], features[0])          # 128 + 64 -> 64
 
-        # dec1  = d1[1,1]
-        # dec2  = d2[1,1]
-        # dec3  = d3[1,1]
-        # dec4  = d4[1,1]
+        self.seg_head = nn.Conv2d(features[0], out_classes, kernel_size=1)
 
-        # output  = outputs[0,0]
-        # output    = output > 0.5
-        # output    = np.array(output, dtype=np.uint8)
+    def forward(self, b, skips):
+        s1, s2, s3, s4 = skips
+
+        x = self.up1(b, s4)
+        x = self.up2(x, s3)
+        x = self.up3(x, s2)
+        x = self.up4(x, s1)
+
+        out = self.seg_head(x)
+        return out
 
 
-        # plt.figure()
-        # plt.subplot(2, 1, 1)
-        # plt.title("input image")
-        # plt.imshow(image.detach().numpy(),cmap='gray')
-        
-        # plt.subplot(3, 5, 2)
-        # plt.title("1'st Encoder Output")
-        # plt.imshow(enc1.detach().numpy(),cmap='gray')
-        
-        # plt.subplot(3, 5, 3)
-        # plt.title("2'nd Encoder Output")
-        # plt.imshow(enc2.detach().numpy(),cmap='gray')
-        
-        # plt.subplot(3, 5, 4)
-        # plt.title("3'th Encoder Output")
-        # plt.imshow(enc3.detach().numpy(),cmap='gray')
+class UNet(nn.Module):
+    def __init__(self, n_classes=1, in_channels=3):
+        super().__init__()
 
-        # plt.subplot(3, 5, 5)
-        # plt.title("4'th Encoder Output")
-        # plt.imshow(enc4.detach().numpy(),cmap='gray')
+        self.encoder = Encoder(in_channels=in_channels)
+        self.decoder = Decoder(out_classes=n_classes)
 
- 
-        # plt.subplot(3, 5, 7)
-        # plt.title("Bottleneck Output")
-        # plt.imshow(bottle.detach().numpy(),cmap='gray') 
+    def forward(self, x):
+        b, skips = self.encoder(x)
+        out = self.decoder(b, skips)
+        return out
 
-        # plt.subplot(3, 5, 8)
-        # plt.title("1'st Decoder Output")
-        # plt.imshow(dec1.detach().numpy(),cmap='gray')
-
-        # plt.subplot(3, 5, 9)
-        # plt.title("2'nd Decoder Output")
-        # plt.imshow(dec2.detach().numpy(),cmap='gray')
-        
-        # plt.subplot(3, 5, 10)
-        # plt.title("3'th Decoder Output")
-        # plt.imshow(dec3.detach().numpy(),cmap='gray')
-        
-        # plt.subplot(3, 5, 11)
-        # plt.title("4'th Decoder Output")
-        # plt.imshow(dec4.detach().numpy(),cmap='gray')
-        
-        # plt.subplot(2, 1, 2)
-        # plt.title("Output Image")
-        # plt.imshow(output,cmap='gray')
-
-        return outputs
 
 if __name__ == "__main__":
+    start = time.time()
 
-    start=time.time()
+    x = torch.randn(2, 3, 256, 256)
+    model = UNet(n_classes=1)
+    y = model(x)
 
-    x = torch.randn((2, 3, 256, 256))
-    f = UNET(1)
-    y = f(x)
-    print(x.shape)
-    print(y.shape)
+    print("Input shape :", x.shape)
+    print("Output shape:", y.shape)
 
-    end=time.time()
-    
-    print(f'spending time :  {end-start}')
-
-
+    end = time.time()
+    print(f"Spending time: {end - start:.4f} sec")
