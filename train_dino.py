@@ -202,7 +202,7 @@ def main():
 
                 k = 4  # 64 token
 
-                student_feats = [student(im)[0] for im in student_augs]  # each [B,512,H,W]
+                student_feats = [student(im.to(device))[0] for im in student_augs]  # each [B,512,H,W]
                 student_tok   = [grid_tokens(f, k) for f in student_feats]         # each [B,16,512]
                 student_proj  = [project_tokens(t, student_head) for t in student_tok]  # each [B,16,D]
 
