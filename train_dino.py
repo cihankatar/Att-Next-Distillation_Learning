@@ -8,7 +8,9 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from data.data_loader import loader
 import torch.nn.functional as F
 from wandb_init import parser_init, wandb_init
-from models.Unet import UNet
+from models.mednext.mednext2d import MedNeXtSegmentationModel
+#from models.Model import model_dice_bce
+
 from utils.Heads import ProjectionHead, SegmentationSHead, SegmentationMHead, get_teacher_momentum, get_teacher_temp
 from utils.Loss_dino import DINOLoss,DenseDINOLoss
 import matplotlib.pyplot as plt
@@ -119,7 +121,7 @@ def main():
     val_loader      = create_loader(args.op)
     args.op         = "train"
     
-    model           = UNet().to(device)
+    model           = MedNeXtSegmentationModel().to(device)
 
     s_head          = SegmentationSHead().to(device)
     monitor_head    = SegmentationMHead().to(device)
@@ -212,7 +214,7 @@ def main():
                     teacher_proj  = [project_tokens(t, teacher_head) for t in teacher_tok]
 
 
-                seg_logits      = s_head(student_feats[0])              
+                seg_logits      = s_head(student_feats[3])              
                 seg_target      = pseudo_masks[0].to(device).type_as(seg_logits)            
                 real_seg_target = cropped_real_mask[0].to(device).type_as(seg_logits)           
 

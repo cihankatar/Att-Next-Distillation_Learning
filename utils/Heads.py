@@ -17,7 +17,7 @@ def get_teacher_temp(epoch, warmup_epochs=20, final_temp=0.07):
         return final_temp
     
 class ProjectionHead(nn.Module):
-    def __init__(self, in_dim=512, hidden_dim=1024, out_dim=4096):
+    def __init__(self, in_dim=256, hidden_dim=1024, out_dim=4096):
         super().__init__()
         self.mlp = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
@@ -27,7 +27,7 @@ class ProjectionHead(nn.Module):
         return self.mlp(x)
 
 class SegmentationSHead(nn.Module):
-    def __init__(self, in_channels=512, out_channels=1, final_size=(256, 256)):
+    def __init__(self, in_channels=256, out_channels=1, final_size=(256, 256)):
         super().__init__()
         self.final_size = final_size
         self.head = nn.Sequential(
@@ -42,7 +42,7 @@ class SegmentationSHead(nn.Module):
         return x
 
 class SegmentationMHead(nn.Module):
-    def __init__(self, in_channels=512, out_channels=1, final_size=(256, 256)):
+    def __init__(self, in_channels=256, out_channels=1, final_size=(256, 256)):
         super().__init__()
         self.final_size = final_size
         self.head = nn.Sequential(
