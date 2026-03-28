@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from data.data_loader import loader
 import torch.nn.functional as F
 from wandb_init import parser_init, wandb_init
-from models.Model import model_dice_bce
+from models.Unet import UNet
 from utils.Heads import ProjectionHead, SegmentationSHead, SegmentationMHead, get_teacher_momentum, get_teacher_temp
 from utils.Loss_dino import DINOLoss,DenseDINOLoss
 import matplotlib.pyplot as plt
@@ -119,7 +119,7 @@ def main():
     val_loader      = create_loader(args.op)
     args.op         = "train"
     
-    model           = model_dice_bce().to(device)
+    model           = UNet().to(device)
 
     s_head          = SegmentationSHead().to(device)
     monitor_head    = SegmentationMHead().to(device)
@@ -200,14 +200,14 @@ def main():
                 #     teacher_proj  = [F.normalize(teacher_head(p), dim=1) for p in teacher_pool]
 
 
-                k = 64  # 64 token
+                k = 4  # 64 token
 
-                student_feats = [student(im.to(device))[3] for im in student_augs]  # each [B,512,H,W]
+                student_feats = [student(im)[0] for im in student_augs]  # each [B,512,H,W]
                 student_tok   = [grid_tokens(f, k) for f in student_feats]         # each [B,16,512]
                 student_proj  = [project_tokens(t, student_head) for t in student_tok]  # each [B,16,D]
 
                 with torch.no_grad():
-                    teacher_feats = [teacher(im.to(device))[3] for im in teacher_augs]
+                    teacher_feats = [teacher(im.to(device))[0] for im in teacher_augs]
                     teacher_tok   = [grid_tokens(f, k) for f in teacher_feats]
                     teacher_proj  = [project_tokens(t, teacher_head) for t in teacher_tok]
 
