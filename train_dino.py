@@ -98,16 +98,16 @@ def update_teacher(student, teacher, momentum):
 
 def main():
 
-    data, training_mode, op, dinowithsegloss, startwithcombinedloss = 'isic_2018_1', "ssl", "train",True,True
+    data, training_mode, op, dinowithsegloss = 'isic_2018_1', "ssl", "train",True
 
     best_iou   = 0.0
     device      = using_device()
     folder_path = setup_paths(data)
     args, res   = parser_init("segmentation task", op, training_mode)
     res         = " ".join(res)
-    res         = "["+res+"]" + f"_segloss_{dinowithsegloss}_combinedloss_{startwithcombinedloss}"
+    res         = "["+res+"]" + f"_segloss_{dinowithsegloss}_mednext2d"
 
-    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss, startwithcombinedloss)
+    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
     print("train_im_path", os.environ["ML_DATA_ROOT"]+"train/images") 
     # Data Loaders
     def create_loader(operation):

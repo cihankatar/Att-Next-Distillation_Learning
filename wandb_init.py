@@ -119,7 +119,7 @@ def parser_init(name, op, training_mode=None):
     else:
         return args,res
 
-def wandb_init (WANDB_API_KEY,WANDB_DIR,args,data,dinowithsegloss, startwithcombinedloss):
+def wandb_init (WANDB_API_KEY,WANDB_DIR,args,data,dinowithsegloss):
     
     op                  = args.op
     training_mode       = args.mode
@@ -153,7 +153,7 @@ def wandb_init (WANDB_API_KEY,WANDB_DIR,args,data,dinowithsegloss, startwithcomb
         project_name = data+"AAtt-Next-SSL_Test"
 
                 
-    wandb.init(project=project_name, dir=WANDB_DIR, name=f"{args.mode}_s{args.sratio}_ep{args.epochs}_segloss_{dinowithsegloss}__combinedloss_{startwithcombinedloss}",
+    wandb.init(project=project_name, dir=WANDB_DIR, name=f"{args.mode}_s{args.sratio}_ep{args.epochs}_segloss_{dinowithsegloss}",
         config={
             "operation"       : op,
             "training_mode"   : training_mode,
