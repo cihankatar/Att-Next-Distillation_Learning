@@ -38,54 +38,61 @@ def dullrazor(img, th=0.05):
 
     clean = patch_fill(img, hair_mask_3ch)  # -> [1, 3, H, W]
     return clean.squeeze(0).clamp(0, 1)     # -> [3, H, W]
+import numpy as np
+import torch
+from torch.utils.data import Dataset
+from PIL import Image
+
 
 class dataset(Dataset):
-    def __init__(self,train_path,mask_path,pmask_path,cutout_pr,cutout_box,transforms,training_type): #
+    def __init__(self, train_path, mask_path, pmask_path, cutout_pr, cutout_box, transforms, training_type):
         super().__init__()
-        self.train_path     = train_path
-        self.mask_path      = mask_path
-        self.pmask_path     = pmask_path
-        self.tr             = transforms
-        self.cutout_pr      = cutout_pr
-        self.cutout_pad     = cutout_box
-        self.training_type  = training_type
+        self.train_path = train_path
+        self.mask_path = mask_path
+        self.pmask_path = pmask_path
+        self.tr = transforms
+        self.cutout_pr = cutout_pr
+        self.cutout_pad = cutout_box
+        self.training_type = training_type
+        self.target_size = (256, 256)
 
     def __len__(self):
-         return len(self.train_path)
-    
-    def __getitem__(self,index):        
+        return len(self.train_path)
 
-            image = Image.open(self.train_path[index])
-            image = np.array(image,dtype=float)
-            image = image.astype(np.float32)
-            image = np.transpose(image, (2, 0, 1))
-            image = torch.from_numpy(image)
+    def _resize_if_needed(self, pil_img, is_mask=False):
+        if pil_img.size != self.target_size:
+            if is_mask:
+                pil_img = pil_img.resize(self.target_size, Image.NEAREST)
+            else:
+                pil_img = pil_img.resize(self.target_size, Image.BILINEAR)
+        return pil_img
 
-            mask = Image.open(self.mask_path[index]).convert('L')            
-            mask = np.array(mask,dtype=float)
-            mask = mask.astype(np.float32)
-            mask = torch.from_numpy(mask)
-            mask = mask.unsqueeze(0)
+    def __getitem__(self, index):
+        # -------- image --------
+        image = Image.open(self.train_path[index]).convert("RGB")
+        image = self._resize_if_needed(image, is_mask=False)
+        image = np.array(image, dtype=np.float32) / 255.0
+        image = np.transpose(image, (2, 0, 1))   # HWC -> CHW
+        image = torch.from_numpy(image)          # [3, 256, 256]
 
-            pseudo_mask = Image.open(self.pmask_path[index]).convert('L')            
-            pseudo_mask = np.array(pseudo_mask,dtype=float)
-            pseudo_mask = pseudo_mask.astype(np.float32)
-            pseudo_mask = torch.from_numpy(pseudo_mask)
-            pseudo_mask = pseudo_mask.unsqueeze(0)
+        # -------- real mask --------
+        mask = Image.open(self.mask_path[index]).convert("L")
+        mask = self._resize_if_needed(mask, is_mask=True)
+        mask = np.array(mask, dtype=np.float32) / 255.0
+        mask = torch.from_numpy(mask).unsqueeze(0)   # [1, 256, 256]
 
-            image=image/255
-            mask=mask/255
-            pseudo_mask=pseudo_mask/255
+        # -------- pseudo mask --------
+        pseudo_mask = Image.open(self.pmask_path[index]).convert("L")
+        pseudo_mask = self._resize_if_needed(pseudo_mask, is_mask=True)
+        pseudo_mask = np.array(pseudo_mask, dtype=np.float32) / 255.0
+        pseudo_mask = torch.from_numpy(pseudo_mask).unsqueeze(0)   # [1, 256, 256]
 
-            if self.training_type == "ssl":
-                # image = dullrazor(image)
-                # this returns a list of 8 tensors
-                image, cropped_real_mask, student_views, teacher_views, pseudo_mask = self.tr(image,mask,pseudo_mask)
-                #pseudo_mask = random_walker_pseudo_mask(image)  # [1, H, W], 0 or 1
+        if self.training_type == "ssl":
+            # this should return resized/aligned outputs
+            image, cropped_real_mask, student_views, teacher_views, pseudo_mask = self.tr(
+                image, mask, pseudo_mask
+            )
 
-                # now you can return them however your SSL loop expects:
-                # e.g. (teacher_views, student_views, mask) or flatten all:
-                return image, self.train_path[index], cropped_real_mask, student_views, teacher_views, pseudo_mask
+            return image, self.train_path[index], cropped_real_mask, student_views, teacher_views, pseudo_mask
 
-            return image , mask ,pseudo_mask
-    
+        return image, mask, pseudo_mask

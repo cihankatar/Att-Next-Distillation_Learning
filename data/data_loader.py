@@ -131,22 +131,27 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
         foldernamepath="isic_2018_1/"
         imageext="/*.jpg"
         maskext="/*.png"
+        pmaskext="/*.png"
     elif data == 'kvasir_1':
         foldernamepath="kvasir_1/"
         imageext="/*.jpg"
         maskext="/*.jpg"
+        pmaskext="/*.png"
     elif data == 'ham_1':
         foldernamepath="HAM10000_1/"
         imageext="/*.jpg"
         maskext="/*.png"
+        pmaskext="/*.png"
     elif data == 'PH2Dataset':
         foldernamepath="PH2Dataset/"
         imageext="/*.jpeg"
-        maskext="/*.jpeg"
+        maskext="/*.jpeg" 
+        pmaskext="/*.png" 
     elif data == 'isic_2016_1':
         foldernamepath="isic_2016_1/"
         imageext="/*.jpg"
         maskext="/*.png"
+        pmaskext="/*.png"
 
     if op =="train":
         train_im_path   = os.environ["ML_DATA_ROOT"]+foldernamepath+"train/images"   
@@ -155,7 +160,7 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
         
         train_im_path   = sorted(glob(train_im_path+imageext))
         train_mask_path = sorted(glob(train_mask_path+maskext))
-        train_pmask_path = sorted(glob(train_pmask_path+maskext))
+        train_pmask_path = sorted(glob(train_pmask_path+pmaskext))
 
     elif op == "validation":
         test_im_path    = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/images"
@@ -164,7 +169,7 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
 
         test_im_path    = sorted(glob(test_im_path+imageext))
         test_mask_path  = sorted(glob(test_mask_path+maskext))
-        test_pmask_path = sorted(glob(test_pmask_path+maskext))
+        test_pmask_path = sorted(glob(test_pmask_path+pmaskext))
 
     else :
         test_im_path    = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/images"
@@ -173,7 +178,7 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
 
         test_im_path    = sorted(glob(test_im_path+imageext))
         test_mask_path  = sorted(glob(test_mask_path+maskext))
-        test_pmask_path = sorted(glob(test_pmask_path+maskext))
+        test_pmask_path = sorted(glob(test_pmask_path+pmaskext))
 
     transformations = data_transform()
 

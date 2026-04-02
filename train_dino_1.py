@@ -98,7 +98,7 @@ def update_teacher(student, teacher, momentum):
 
 def main():
 
-    data, training_mode, op, dinowithsegloss = 'PH2Dataset', "ssl", "train",True
+    data, training_mode, op, dinowithsegloss = 'isic_2016_1', "ssl", "train",True
 
     best_iou   = 0.0
     device      = using_device()
@@ -203,12 +203,12 @@ def main():
 
                 k = 4  # 64 token
 
-                student_feats = [student(im.to(device))[0] for im in student_augs]  # each [B,512,H,W]
+                student_feats = [student(im.to(device))[3] for im in student_augs]  # each [B,512,H,W]
                 student_tok   = [grid_tokens(f, k) for f in student_feats]         # each [B,16,512]
                 student_proj  = [project_tokens(t, student_head) for t in student_tok]  # each [B,16,D]
 
                 with torch.no_grad():
-                    teacher_feats = [teacher(im.to(device))[0] for im in teacher_augs]
+                    teacher_feats = [teacher(im.to(device))[3] for im in teacher_augs]
                     teacher_tok   = [grid_tokens(f, k) for f in teacher_feats]
                     teacher_proj  = [project_tokens(t, teacher_head) for t in teacher_tok]
 
