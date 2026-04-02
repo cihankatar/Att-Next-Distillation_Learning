@@ -8,8 +8,8 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from data.data_loader import loader
 import torch.nn.functional as F
 from wandb_init import parser_init, wandb_init
-from models.mednext.mednext2d import MedNeXtSegmentationModel
-#from models.Model import model_dice_bce
+#from models.mednext.mednext2d import MedNeXtSegmentationModel
+from models.Model import model_dice_bce
 
 from utils.Heads import ProjectionHead, SegmentationSHead, SegmentationMHead, get_teacher_momentum, get_teacher_temp
 from utils.Loss_dino import DINOLoss,DenseDINOLoss
@@ -98,14 +98,14 @@ def update_teacher(student, teacher, momentum):
 
 def main():
 
-    data, training_mode, op, dinowithsegloss = 'isic_2018_1', "ssl", "train",True
+    data, training_mode, op, dinowithsegloss = 'isic_2016_1', "ssl", "train",True
 
     best_iou   = 0.0
     device      = using_device()
     folder_path = setup_paths(data)
     args, res   = parser_init("segmentation task", op, training_mode)
     res         = " ".join(res)
-    res         = "["+res+"]" + f"_segloss_{dinowithsegloss}_mednext2d"
+    res         = "["+res+"]" + f"_segloss_{dinowithsegloss}_{data}"
 
     config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
     print("train_im_path", os.environ["ML_DATA_ROOT"]+"train/images") 
@@ -121,8 +121,7 @@ def main():
     val_loader      = create_loader(args.op)
     args.op         = "train"
     
-    model           = MedNeXtSegmentationModel().to(device)
-
+    model           = model_dice_bce().to(device)
     s_head          = SegmentationSHead().to(device)
     monitor_head    = SegmentationMHead().to(device)
 

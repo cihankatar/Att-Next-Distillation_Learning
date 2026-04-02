@@ -39,7 +39,7 @@ def config_func(training_mode):
         "lrate"             :0.0001,
         "aug"               :True,
         "shuffle"           :True,
-        "sratio"            :1,
+        "sratio"            :0.002,
         "workers"           :2,
         "cutoutpr"          :0.5,
         "cutoutbox"         :25,
@@ -55,12 +55,12 @@ def config_func(training_mode):
         "sslmode_modelname" :"Dino",
         "imnetpr"           :True,
         "bsize"             :8,
-        "epochs"            :503,
+        "epochs"            :499,
         "imsize"            :256,
         "lrate"             :0.0001,
         "aug"               :True,
         "shuffle"           :True,
-        "sratio"            :0.5,
+        "sratio"            :0.002,
         "workers"           :2,
         "cutoutpr"          :0.5,
         "cutoutbox"         :25,
@@ -115,7 +115,7 @@ def parser_init(name, op, training_mode=None):
         for key,value in configs["ssl_config"].items():
             ssl_config.append(str(key)+"="+str(value))
         
-        return args,res,ssl_config
+        return args,res
     else:
         return args,res
 

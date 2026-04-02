@@ -35,7 +35,7 @@ def setup_paths(data):
     
 if __name__ == "__main__":
 
-    data, training_mode, op,addtopoloss = 'isic_2018_1', "supervised", "train",False
+    data, training_mode, op, dinowithsegloss, startwithcombinedloss,addtopoloss = 'isic_2018_1', "ssl_pretrained", "train",True,True,True
     device          = using_device()
     folder_path     = setup_paths(data)
 
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     args.shuffle        = False
     args.op             = "test"
 
-    config          = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data)
+    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
     def create_loader(operation):
 
         return loader(operation,args.mode, args.sslmode_modelname, args.bsize, args.workers,args.imsize, args.cutoutpr, args.cutoutbox, args.shuffle, args.sratio, data)
@@ -88,7 +88,7 @@ if __name__ == "__main__":
                 "acc": metrics_score[4]/len(test_loader)
             }
 
-            print(f" F1(Dice): {acc['jaccard']:1.4f} - F1(Dice): {acc['f1']:1.4f} - Recall: {acc['recall']:1.4f} - "
+            print(f" IoU: {acc['jaccard']:1.4f} - F1(Dice): {acc['f1']:1.4f} - Recall: {acc['recall']:1.4f} - "
                 f"Precision: {acc['precision']:1.4f} - Acc: {acc['acc']:1.4f} ")
 
             if idx == 1 or idx==30:
