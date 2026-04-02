@@ -213,7 +213,7 @@ def main():
                     teacher_proj  = [project_tokens(t, teacher_head) for t in teacher_tok]
 
 
-                seg_logits      = s_head(student_feats[3])              
+                seg_logits      = s_head(student_feats[0])              
                 seg_target      = pseudo_masks[0].to(device).type_as(seg_logits)            
                 real_seg_target = cropped_real_mask[0].to(device).type_as(seg_logits)           
 
