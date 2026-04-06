@@ -37,7 +37,7 @@ def setup_paths(data):
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op, dinowithsegloss = 'PH2Dataset', "ssl_pretrained", "train",True
+    data, training_mode, op, dinowithsegloss = 'isic_2016_1', "ssl_pretrained", "train",True
 
     best_valid_loss   = float("inf")
     device      = using_device()
@@ -63,7 +63,7 @@ def main():
     val_loader      = create_loader(args.op)
     args.op         = "train"
 
-    model       = model_dice_bce().to(device)
+    model       = model_dice_bce(args.op).to(device)
     encoder     = model.encoder
 
     checkpoint_path_ssl_read = folder_path+str(encoder.__class__.__name__)+str(ssl_config)
