@@ -55,7 +55,7 @@ def config_func(training_mode):
         "sslmode_modelname" :"Dino",
         "imnetpr"           :True,
         "bsize"             :8,
-        "epochs"            :499,
+        "epochs"            :503,
         "imsize"            :256,
         "lrate"             :0.0001,
         "aug"               :True,
@@ -115,7 +115,7 @@ def parser_init(name, op, training_mode=None):
         for key,value in configs["ssl_config"].items():
             ssl_config.append(str(key)+"="+str(value))
         
-        return args,res
+        return args,res,ssl_config
     else:
         return args,res
 

@@ -10,7 +10,7 @@ from augmentation.Augmentation import Cutout, cutmix
 from wandb_init import parser_init, wandb_init
 from utils.metrics import calculate_metrics
 from models.Model import model_dice_bce
-
+from models.mednext.mednext2d import MedNeXtSegmentationModel
 
 def using_device():
     """Set and print the device used for training."""
@@ -37,7 +37,7 @@ def setup_paths(data):
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op, dinowithsegloss, startwithcombinedloss = 'isic_2018_1', "ssl_pretrained", "train",True,True
+    data, training_mode, op, dinowithsegloss = 'isic_2016_1', "ssl_pretrained", "train",True
 
     best_valid_loss   = float("inf")
     device      = using_device()
@@ -47,9 +47,12 @@ def main():
     res           = " ".join(res)
     res           = "["+res+"]"
     ssl_config    = " ".join(ssl_config)
-    ssl_config    = "["+ssl_config+"]"+ f"_segloss_{dinowithsegloss}_combinedloss_{startwithcombinedloss}"
+    ssl_config    = "["+ssl_config+"]"+ f"_segloss_{dinowithsegloss}_{data}"
 
-    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss, startwithcombinedloss)
+# Encoder[op=train mode=ssl sslmode_modelname=Dino imnetpr=False bsize=8 epochs=298 imsize=256 lrate=0.0001 aug=False shuffle=True sratio=None workers=2 cutoutpr=0.5 cutoutbox=None cutmixpr=0.5 noclasses=1]_segloss_True_mednext2d
+# Encoder[op=train mode=ssl sslmode_modelname=Dino imnetpr=False bsize=8 epochs=298 imsize=256 lrate=0.0001 aug=False shuffle=True sratio=None workers=2 cutoutpr=0.5 cutoutbox=None cutmixpr=0.5 noclasses=1]_segloss_True_Unet  
+    
+    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
 
     # Data Loaders
     def create_loader(operation):
@@ -60,7 +63,7 @@ def main():
     val_loader      = create_loader(args.op)
     args.op         = "train"
 
-    model       = model_dice_bce(args.mode).to(device)
+    model       = model_dice_bce().to(device)
     encoder     = model.encoder
 
     checkpoint_path_ssl_read = folder_path+str(encoder.__class__.__name__)+str(ssl_config)
