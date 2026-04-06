@@ -63,7 +63,7 @@ def main():
     val_loader      = create_loader(args.op)
     args.op         = "train"
 
-    model       = model_dice_bce(args.op).to(device)
+    model       = model_dice_bce(args.mode).to(device)
     encoder     = model.encoder
 
     checkpoint_path_ssl_read = folder_path+str(encoder.__class__.__name__)+str(ssl_config)
