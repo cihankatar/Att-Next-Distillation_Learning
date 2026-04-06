@@ -37,7 +37,7 @@ def setup_paths(data):
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op, dinowithsegloss = 'PH2Dataset', "ssl_pretrained", "train",True
+    data, training_mode, op, dinowithsegloss,seed = 'isic_2018_1', "ssl_pretrained", "train",True, 932
 
     best_valid_loss   = float("inf")
     device      = using_device()
@@ -47,7 +47,7 @@ def main():
     res           = " ".join(res)
     res           = "["+res+"]"
     ssl_config    = " ".join(ssl_config)
-    ssl_config    = "["+ssl_config+"]"+ f"_segloss_{dinowithsegloss}_{data}"
+    ssl_config    = "["+ssl_config+"]"+ f"_segloss_{dinowithsegloss}_combinedloss_True"
 
 # Encoder[op=train mode=ssl sslmode_modelname=Dino imnetpr=False bsize=8 epochs=298 imsize=256 lrate=0.0001 aug=False shuffle=True sratio=None workers=2 cutoutpr=0.5 cutoutbox=None cutmixpr=0.5 noclasses=1]_segloss_True_mednext2d
 # Encoder[op=train mode=ssl sslmode_modelname=Dino imnetpr=False bsize=8 epochs=298 imsize=256 lrate=0.0001 aug=False shuffle=True sratio=None workers=2 cutoutpr=0.5 cutoutbox=None cutmixpr=0.5 noclasses=1]_segloss_True_Unet  
@@ -55,12 +55,12 @@ def main():
     config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
 
     # Data Loaders
-    def create_loader(operation):
-        return loader(operation,args.mode, args.sslmode_modelname, args.bsize, args.workers,args.imsize, args.cutoutpr, args.cutoutbox, args.shuffle, args.sratio, data)
+    def create_loader(operation,seed):
+        return loader(operation,args.mode, args.sslmode_modelname, args.bsize, args.workers,args.imsize, args.cutoutpr, args.cutoutbox, args.shuffle, args.sratio, data, seed)
 
-    train_loader    = create_loader(args.op)
+    train_loader    = create_loader(args.op,seed)
     args.op         =  "validation"
-    val_loader      = create_loader(args.op)
+    val_loader      = create_loader(args.op,seed)
     args.op         = "train"
 
     model       = model_dice_bce(args.mode).to(device)
@@ -69,7 +69,7 @@ def main():
     checkpoint_path_ssl_read = folder_path+str(encoder.__class__.__name__)+str(ssl_config)
     encoder.load_state_dict(torch.load(checkpoint_path_ssl_read, map_location=torch.device('cpu')))
 
-    checkpoint_path = folder_path+str(model.__class__.__name__)+str(res)
+    checkpoint_path = folder_path+str(model.__class__.__name__)+str(res)+f"_seed_{seed}"
     optimizer = Adam(model.parameters(), lr=config['learningrate'])
     scheduler = CosineAnnealingLR(optimizer, config['epochs'], eta_min=config['learningrate'] / 10)
     loss_fn   = Dice_CE_Loss()

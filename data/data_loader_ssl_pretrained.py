@@ -34,7 +34,7 @@ def data_transform(op,image_size):
             
         return transformations
 
-def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_box,shuffle,split_ratio,data):
+def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_box,shuffle,split_ratio,data,seed):
 
     if data=='isic_2018_1':
         foldernamepath="isic_2018_1/"
@@ -103,7 +103,7 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
 
             # Shuffle and split
             combined = list(zip(train_im_path, train_mask_path))
-            random.seed(100)
+            random.seed(seed)
             random.shuffle(combined)
 
             split_index = int(len(combined) * split_ratio)
