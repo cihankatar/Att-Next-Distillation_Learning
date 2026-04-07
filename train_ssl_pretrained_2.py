@@ -37,7 +37,7 @@ def setup_paths(data):
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op, dinowithsegloss,seed = 'isic_2018_1', "ssl_pretrained", "train",True, 932
+    data, training_mode, op, dinowithsegloss,seed = 'isic_2018_1', "ssl_pretrained", "train",False, 932
 
     best_valid_loss   = float("inf")
     device      = using_device()
@@ -47,7 +47,7 @@ def main():
     res           = " ".join(res)
     res           = "["+res+"]"
     ssl_config    = " ".join(ssl_config)
-    ssl_config    = "["+ssl_config+"]"+ f"_segloss_{dinowithsegloss}_combinedloss_True"
+    ssl_config    = "["+ssl_config+"]"+ f"_segloss_{dinowithsegloss}_combinedloss_False"
 
 # Encoder[op=train mode=ssl sslmode_modelname=Dino imnetpr=False bsize=8 epochs=298 imsize=256 lrate=0.0001 aug=False shuffle=True sratio=None workers=2 cutoutpr=0.5 cutoutbox=None cutmixpr=0.5 noclasses=1]_segloss_True_mednext2d
 # Encoder[op=train mode=ssl sslmode_modelname=Dino imnetpr=False bsize=8 epochs=298 imsize=256 lrate=0.0001 aug=False shuffle=True sratio=None workers=2 cutoutpr=0.5 cutoutbox=None cutmixpr=0.5 noclasses=1]_segloss_True_Unet  
