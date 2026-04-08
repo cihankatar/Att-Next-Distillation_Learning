@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from data.data_loader_ssl_pretrained import loader
 from utils.Loss_dino import Dice_CE_Loss
 from augmentation.Augmentation import Cutout, cutmix
-from wandb_init import parser_init, wandb_init
+from wandb_init_7 import parser_init, wandb_init
 from utils.metrics import calculate_metrics
 from models.Model import model_dice_bce
 import time
@@ -39,7 +39,7 @@ def setup_paths(data):
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op, dinowithsegloss,addtopoloss,seed = 'isic_2018_1', "supervised", "train",False,False,932
+    data, training_mode, op, dinowithsegloss,addtopoloss,seed = 'isic_2018_1', "supervised", "train",False,False,435
 
     best_valid_loss   = float("inf")
     device      = using_device()

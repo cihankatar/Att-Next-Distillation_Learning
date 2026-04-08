@@ -39,7 +39,7 @@ def config_func(training_mode):
         "lrate"             :0.0001,
         "aug"               :True,
         "shuffle"           :True,
-        "sratio"            :0.002,
+        "sratio"            :0.005,
         "workers"           :2,
         "cutoutpr"          :0.5,
         "cutoutbox"         :25,

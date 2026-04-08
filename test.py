@@ -35,7 +35,7 @@ def setup_paths(data):
     
 if __name__ == "__main__":
 
-    data, training_mode, op, dinowithsegloss, startwithcombinedloss,addtopoloss = 'isic_2018_1', "ssl_pretrained", "train",True,True,True
+    data, training_mode, op, dinowithsegloss,addtopoloss,seed = 'isic_2018_1', "ssl_pretrained", "train",True,False,932
     device          = using_device()
     folder_path     = setup_paths(data)
 
@@ -47,19 +47,19 @@ if __name__ == "__main__":
     args.shuffle        = False
     args.op             = "test"
 
-    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
+    #config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
     def create_loader(operation):
 
-        return loader(operation,args.mode, args.sslmode_modelname, args.bsize, args.workers,args.imsize, args.cutoutpr, args.cutoutbox, args.shuffle, args.sratio, data)
+        return loader(operation,args.mode, args.sslmode_modelname, args.bsize, args.workers,args.imsize, args.cutoutpr, args.cutoutbox, args.shuffle, args.sratio, data,seed)
 
     model     = model_dice_bce().to(device)
 
-    checkpoint_path = folder_path+str(model.__class__.__name__)+str(res)    
+    checkpoint_path = folder_path+str(model.__class__.__name__)+str(res)+f"_seed_{seed}"
     model.load_state_dict(torch.load(checkpoint_path, map_location=torch.device('cpu')))
     
     test_loader      = create_loader(args.op)
 
-    print(f"model path:",res)
+    print(f"model:",checkpoint_path)
     print('test_loader loader transform',test_loader.dataset.tr)
 
     print(f"testing with {len(test_loader)*args.bsize} images")
@@ -113,10 +113,10 @@ if __name__ == "__main__":
     acc["precision"],
     acc["acc"]  )
 
-    wandb.log({
-        "predictions_table": image_table,
-        "metrics_table": metrics_table
-    })
+    # wandb.log({
+    #     "predictions_table": image_table,
+    #     "metrics_table": metrics_table
+    # })
 
 
-    wandb.finish()
+    # wandb.finish()

@@ -115,7 +115,7 @@ def parser_init(name, op, training_mode=None):
         for key,value in configs["ssl_config"].items():
             ssl_config.append(str(key)+"="+str(value))
         
-        return args,res,ssl_config
+        return args,res
     else:
         return args,res
 
