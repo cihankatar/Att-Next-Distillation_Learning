@@ -39,7 +39,7 @@ def setup_paths(data):
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op, dinowithsegloss, startwithcombinedloss,addtopoloss = 'isic_2018_1', "supervised", "train",False,False,False
+    data, training_mode, op, dinowithsegloss,addtopoloss,seed = 'isic_2018_1', "supervised", "train",False,False,932
 
     best_valid_loss   = float("inf")
     device      = using_device()
@@ -49,7 +49,7 @@ def main():
     res           = " ".join(res)
     res           = "["+res+"]"
     
-    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss, startwithcombinedloss)
+    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
 
     # Data Loaders
     def create_loader(operation):
@@ -62,7 +62,7 @@ def main():
 
     model       = model_dice_bce(args.mode).to(device)
 
-    checkpoint_path = folder_path+str(model.__class__.__name__)+str(res)
+    checkpoint_path = folder_path+str(model.__class__.__name__)+str(res)+f"_seed_{seed}"
     optimizer = Adam(model.parameters(), lr=config['learningrate'])
     scheduler = CosineAnnealingLR(optimizer, config['epochs'], eta_min=config['learningrate'] / 10)
     loss_fn   = Dice_CE_Loss()
