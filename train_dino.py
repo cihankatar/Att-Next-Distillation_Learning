@@ -9,13 +9,12 @@ from data.data_loader import loader
 import torch.nn.functional as F
 from wandb_init import parser_init, wandb_init
 #from models.mednext.mednext2d import MedNeXtSegmentationModel
-from models.Model import model_dice_bce
+from models.Model import ATTNext
 
 from utils.Heads import ProjectionHead, SegmentationSHead, SegmentationMHead, get_teacher_momentum, get_teacher_temp
-from utils.Loss_dino import DINOLoss,DenseDINOLoss
+from utils.Loss_dino import DINOLoss
 import matplotlib.pyplot as plt
 import numpy as np
-import time
 
 def grid_tokens(feat, k):
     # feat: [B,C,H,W] -> [B, T, C] (T=k*k)
@@ -87,9 +86,15 @@ def setup_paths(data):
         "isic_2016_1": "isic_2016_1/"
     }
     folder = folder_mapping.get(data)
-    base_path = os.environ["ML_DATA_OUTPUT"] if torch.cuda.is_available() else os.environ["ML_DATA_OUTPUT_LOCAL"]
-    print(base_path)
-    return os.path.join(base_path, folder)
+    if folder is None:
+        raise ValueError(f"Unsupported dataset: {data}")
+    output_key = "ML_DATA_OUTPUT" if torch.cuda.is_available() else "ML_DATA_OUTPUT_LOCAL"
+    base_path = os.environ.get(output_key) or os.environ.get("ML_DATA_OUTPUT")
+    if not base_path:
+        raise EnvironmentError(f"{output_key} must point to the checkpoint output directory")
+    folder_path = os.path.join(base_path, folder)
+    os.makedirs(folder_path, exist_ok=True)
+    return folder_path
 
 @torch.no_grad()
 def update_teacher(student, teacher, momentum):
@@ -98,7 +103,8 @@ def update_teacher(student, teacher, momentum):
 
 def main():
 
-    data, training_mode, op, dinowithsegloss = 'PH2Dataset', "ssl", "train",True
+    data = os.environ.get("TOPODISTILL_DATASET", "PH2Dataset")
+    training_mode, op, dinowithsegloss = "ssl", "train", True
 
     best_iou   = 0.0
     device      = using_device()
@@ -107,8 +113,8 @@ def main():
     res         = " ".join(res)
     res         = "["+res+"]" + f"_segloss_{dinowithsegloss}_{data}"
 
-    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
-    print("train_im_path", os.environ["ML_DATA_ROOT"]+"train/images") 
+    config      = wandb_init(os.environ.get("WANDB_API_KEY"), os.environ.get("WANDB_DIR"), args, data, dinowithsegloss)
+    print("data root", os.environ["ML_DATA_ROOT"])
     # Data Loaders
     def create_loader(operation):
 
@@ -121,7 +127,7 @@ def main():
     val_loader      = create_loader(args.op)
     args.op         = "train"
     
-    model           = model_dice_bce().to(device)
+    model           = ATTNext(args.mode).to(device)
     s_head          = SegmentationSHead().to(device)
     monitor_head    = SegmentationMHead().to(device)
 
@@ -138,26 +144,17 @@ def main():
     loss_fn         = DINOLoss()
     checkpoint_path = folder_path+str(student.__class__.__name__)+str(res)
 
-    params_to_optimize = list(student.parameters())
+    student_head = ProjectionHead().to(device)
+    teacher_head = copy.deepcopy(student_head).to(device)
+    for p in teacher_head.parameters():
+        p.requires_grad = False
+
+    params_to_optimize = list(student.parameters()) + list(student_head.parameters())
     if dinowithsegloss:
         params_to_optimize += list(s_head.parameters())
     
     optimizer = AdamW(params_to_optimize, lr=config['learningrate'], weight_decay=0.05)
     scheduler       = CosineAnnealingLR(optimizer, config['epochs'], eta_min=config['learningrate'] / 10)
-
-    ML_DATA_OUTPUT      = os.environ["ML_DATA_OUTPUT"]+'isic_1/'
-
-    checkpoint_path_read = ML_DATA_OUTPUT+str(student.__class__.__name__)+str(res)
-    #student.load_state_dict(torch.load(checkpoint_path_read, map_location=torch.device('cpu')))
-    checkpoint_path_head = ML_DATA_OUTPUT+str(s_head.__class__.__name__)+str(res)
-    #s_head.load_state_dict(torch.load(checkpoint_path_head, map_location=torch.device('cpu')))
-
-    student_head = ProjectionHead().to(device)
-    teacher_head = copy.deepcopy(student_head).to(device)
-    # Segmentation Head (Online Probe) için ayrı optimizer
-    # Bu kafa sadece detach edilmiş özelliklerle eğitilecek
-    for p in teacher_head.parameters():
-        p.requires_grad = False
 
     print(f"Training on {len(train_loader) * args.bsize} images. Saving checkpoints to {folder_path}")
     print(f"model config : {checkpoint_path}")

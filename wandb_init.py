@@ -1,11 +1,17 @@
 import wandb
-import numpy as np
-import matplotlib.pyplot as plt
 import argparse
+import os
 import torch
 
 def parse_bool(s):
-    return True if str(s)=="True" else False
+    if isinstance(s, bool):
+        return s
+    value = str(s).strip().lower()
+    if value in {"true", "1", "yes", "y"}:
+        return True
+    if value in {"false", "0", "no", "n"}:
+        return False
+    raise argparse.ArgumentTypeError("expected a boolean value (true/false)")
 
 def config_func(training_mode):
     if training_mode == "ssl":
@@ -39,7 +45,7 @@ def config_func(training_mode):
         "lrate"             :0.0001,
         "aug"               :True,
         "shuffle"           :True,
-        "sratio"            :0.002,
+        "sratio"            :0.1,
         "workers"           :2,
         "cutoutpr"          :0.5,
         "cutoutbox"         :25,
@@ -55,12 +61,12 @@ def config_func(training_mode):
         "sslmode_modelname" :"Dino",
         "imnetpr"           :True,
         "bsize"             :8,
-        "epochs"            :499,
+        "epochs"            :503,
         "imsize"            :256,
         "lrate"             :0.0001,
         "aug"               :True,
         "shuffle"           :True,
-        "sratio"            :0.002,
+        "sratio"            :0.1,
         "workers"           :2,
         "cutoutpr"          :0.5,
         "cutoutbox"         :25,
@@ -103,7 +109,7 @@ def parser_init(name, op, training_mode=None):
     args_value=[]
     res=[]
 
-    for key,value in parser.parse_args()._get_kwargs():
+    for key,value in vars(args).items():
         args_key.append(key)
         args_value.append(str(value))
 
@@ -115,11 +121,11 @@ def parser_init(name, op, training_mode=None):
         for key,value in configs["ssl_config"].items():
             ssl_config.append(str(key)+"="+str(value))
         
-        return args,res
+        return args, res, ssl_config
     else:
-        return args,res
+        return args, res
 
-def wandb_init (WANDB_API_KEY,WANDB_DIR,args,data,dinowithsegloss):
+def wandb_init(wandb_api_key, wandb_dir, args, data, dinowithsegloss):
     
     op                  = args.op
     training_mode       = args.mode
@@ -138,9 +144,13 @@ def wandb_init (WANDB_API_KEY,WANDB_DIR,args,data,dinowithsegloss):
     cutmixpr            = args.cutmixpr
     workers             = args.workers
 
-    print(f'Taining Configs:\noperation:{op}\ntraining_mode:{training_mode}\nssl_mode_modelname:{ssl_mode_modelname}\nimagenetpretrained:{imnetpr} \nbatch_size:{batch_size}, \nepochs:{epochs}, \nimagesize:{image_size}, \naugmentation:{augmentation}, \nl_r:{learningrate}, \nn_classes:{n_classes}, \nshuffle:{shuffle}, \ncutout_pr:{cutout_pr}, \ncutout_box_size:{box_size},\ncutmixpr:{cutmixpr}, \nworkers:{workers},\nsplit_ratio:{split_ratio}')
+    print(f'Training Configs:\noperation:{op}\ntraining_mode:{training_mode}\nssl_mode_modelname:{ssl_mode_modelname}\nimagenetpretrained:{imnetpr} \nbatch_size:{batch_size}, \nepochs:{epochs}, \nimagesize:{image_size}, \naugmentation:{augmentation}, \nl_r:{learningrate}, \nn_classes:{n_classes}, \nshuffle:{shuffle}, \ncutout_pr:{cutout_pr}, \ncutout_box_size:{box_size},\ncutmixpr:{cutmixpr}, \nworkers:{workers},\nsplit_ratio:{split_ratio}')
 
-    wandb.login(key=WANDB_API_KEY)
+    if wandb_api_key:
+        wandb.login(key=wandb_api_key)
+
+    wandb_dir = wandb_dir or os.path.join(os.getcwd(), "wandb")
+    os.makedirs(wandb_dir, exist_ok=True)
     if op == "train": 
 
         if torch.cuda.is_available():
@@ -153,7 +163,7 @@ def wandb_init (WANDB_API_KEY,WANDB_DIR,args,data,dinowithsegloss):
         project_name = data+"AAtt-Next-SSL_Test"
 
                 
-    wandb.init(project=project_name, dir=WANDB_DIR, name=f"{args.mode}_s{args.sratio}_ep{args.epochs}_segloss_{dinowithsegloss}",
+    wandb.init(project=project_name, dir=wandb_dir, name=f"{args.mode}_s{args.sratio}_ep{args.epochs}_segloss_{dinowithsegloss}",
         config={
             "operation"       : op,
             "training_mode"   : training_mode,

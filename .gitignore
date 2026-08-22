@@ -1,32 +1,44 @@
-test/images/**
-test/masks/**
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-val/images/**
-val/masks/**
-
-train/images/**
-train/masks/**
-
-modelsave/**
-
-wandb
-slurm
-
-utils/__pycache__
-*.DS_Store
-*.JPG
-
-/modelsave/**
-/slurm
-
-/try
-*.log
-*.wandb
-.venv
+# Local configuration and IDE files
+.env
 .DS_Store
-*.pth
-*.jpg
-*.pyc
+.idea/
+.vscode/
 
-*.ipynb_checkpoints
-*.pyc
+# Experiment tracking and logs
+wandb/
+*.wandb
+*.log
+
+# Model checkpoints and generated outputs
+*.pt
+*.pth
+*.ckpt
+modelsave/
+outputs/
+
+# Local datasets
+train/images/
+train/masks/
+train/pmasks/
+val/images/
+val/masks/
+val/pmasks/
+test/images/
+test/masks/
+test/pmasks/
+
+# Notebook state and scheduler artifacts
+.ipynb_checkpoints/
+slurm/
+*.out
+*.err

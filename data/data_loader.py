@@ -152,29 +152,36 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
         imageext="/*.jpg"
         maskext="/*.png"
         pmaskext="/*.png"
+    else:
+        raise ValueError(f"Unsupported dataset: {data}")
+
+    data_root = os.environ.get("ML_DATA_ROOT")
+    if not data_root:
+        raise EnvironmentError("ML_DATA_ROOT must point to the directory containing the datasets")
+    dataset_root = os.path.join(data_root, foldernamepath)
 
     if op =="train":
-        train_im_path   = os.environ["ML_DATA_ROOT"]+foldernamepath+"train/images"   
-        train_mask_path = os.environ["ML_DATA_ROOT"]+foldernamepath+"train/masks"
-        train_pmask_path = os.environ["ML_DATA_ROOT"]+foldernamepath+"train/pmasks"
+        train_im_path   = os.path.join(dataset_root, "train/images")
+        train_mask_path = os.path.join(dataset_root, "train/masks")
+        train_pmask_path = os.path.join(dataset_root, "train/pmasks")
         
         train_im_path   = sorted(glob(train_im_path+imageext))
         train_mask_path = sorted(glob(train_mask_path+maskext))
         train_pmask_path = sorted(glob(train_pmask_path+pmaskext))
 
     elif op == "validation":
-        test_im_path    = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/images"
-        test_mask_path  = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/masks"
-        test_pmask_path = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/pmasks"
+        test_im_path    = os.path.join(dataset_root, "val/images")
+        test_mask_path  = os.path.join(dataset_root, "val/masks")
+        test_pmask_path = os.path.join(dataset_root, "val/pmasks")
 
         test_im_path    = sorted(glob(test_im_path+imageext))
         test_mask_path  = sorted(glob(test_mask_path+maskext))
         test_pmask_path = sorted(glob(test_pmask_path+pmaskext))
 
     else :
-        test_im_path    = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/images"
-        test_mask_path  = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/masks"
-        test_pmask_path = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/pmasks"
+        test_im_path    = os.path.join(dataset_root, "test/images")
+        test_mask_path  = os.path.join(dataset_root, "test/masks")
+        test_pmask_path = os.path.join(dataset_root, "test/pmasks")
 
         test_im_path    = sorted(glob(test_im_path+imageext))
         test_mask_path  = sorted(glob(test_mask_path+maskext))
@@ -182,17 +189,36 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
 
     transformations = data_transform()
 
-    if torch.cuda.is_available():
-        if op == "train":
-            data_train  = dataset(train_im_path,train_mask_path,train_pmask_path,cutout_pr,cutout_box, transformations,mode)
-        else:
-            data_test   = dataset(test_im_path, test_mask_path,test_pmask_path,cutout_pr,cutout_box, transformations,mode)
+    if op == "train":
+        paths = (train_im_path, train_mask_path, train_pmask_path)
+    else:
+        paths = (test_im_path, test_mask_path, test_pmask_path)
+    counts = [len(items) for items in paths]
+    if not counts[0] or len(set(counts)) != 1:
+        raise RuntimeError(
+            f"Expected aligned image/mask/pmask files for {data}/{op}, found counts {counts}"
+        )
 
-    elif op == "train":  #train for debug in local
-        data_train  = dataset(train_im_path[5:15],train_mask_path[5:15],train_pmask_path[5:15],cutout_pr,cutout_box, transformations,mode)
-
-    else:  #test in local
-        data_test   = dataset(test_im_path[5:15], test_mask_path[5:15], test_pmask_path[5:15],cutout_pr,cutout_box, transformations,mode)
+    if op == "train":
+        data_train = dataset(
+            train_im_path,
+            train_mask_path,
+            train_pmask_path,
+            cutout_pr,
+            cutout_box,
+            transformations,
+            mode,
+        )
+    else:
+        data_test = dataset(
+            test_im_path,
+            test_mask_path,
+            test_pmask_path,
+            cutout_pr,
+            cutout_box,
+            transformations,
+            mode,
+        )
 
     if op == "train":
         train_loader = DataLoader(
@@ -200,7 +226,7 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
             batch_size  = batch_size,
             shuffle     = shuffle,
             num_workers = num_workers,
-            persistent_workers=True
+            persistent_workers=num_workers > 0
             )
         return train_loader
     

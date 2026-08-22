@@ -1,60 +1,51 @@
- if training_mode == "ssl":
-        configs={
-        "mode"              :"ssl",
-        "sslmode"           :"simclr",
-        "imnetpretrained"   :False,
-        "bsize"             :8,
-        "epochs"            :150,
-        "imsize"            :128,
-        "lrate"             :0.001,
-        "aug"               :False,
-        "shuffle"           :True,
-        "sratio"            :None,
-        "workers"           :2,
-        "cutoutpr"          :None,
-        "cutoutbox"         :None,
-        "cutmixpr"          :None,
-        "noclasses"         :1,
+# Reference defaults. Runtime command-line defaults are defined in wandb_init.py.
+ssl:
+  mode: ssl
+  sslmode_modelname: Dino
+  imnetpr: false
+  bsize: 8
+  epochs: 300
+  imsize: 256
+  lrate: 0.0001
+  aug: false
+  shuffle: true
+  sratio: null
+  workers: 2
+  cutoutpr: 0.5
+  cutoutbox: null
+  cutmixpr: 0.5
+  noclasses: 1
 
-  elif training_mode == "supervised":
+supervised:
+  mode: supervised
+  sslmode_modelname: Dino
+  imnetpr: true
+  bsize: 8
+  epochs: 450
+  imsize: 256
+  lrate: 0.0001
+  aug: true
+  shuffle: true
+  sratio: 0.1
+  workers: 2
+  cutoutpr: 0.5
+  cutoutbox: 25
+  cutmixpr: 0.5
+  noclasses: 1
 
-        configs={
-        "mode"              :"supervised",
-        "sslmode"           :None,
-        "imnetpretrained"   :True,
-        "bsize"             :8,
-        "epochs"            :150,
-        "imsize"            :128,
-        "lrate"             :0.0001,
-        "aug"               :True,
-        "shuffle"           :True,
-        "sratio"            :None,
-        "workers"           :2,
-        "cutoutpr"          :0.5,
-        "cutoutbox"         :25,
-        "cutmixpr"          :0.5,
-        "noclasses"         :1,
-
-  elif training_mode == "ssl_pretrained":
-        ssl_config_to_load = config("ssl")
-        configs={
-        "mode"              :"ssl_pretrained",
-        "sslmode"           :None,
-        "imnetpretrained"   :None,
-        "bsize"             :8,
-        "epochs"            :150,
-        "imsize"            :128,
-        "lrate"             :0.0001,
-        "aug"               :True,
-        "shuffle"           :True,
-        "sratio"            :0.1,
-        "workers"           :2,
-        "cutoutpr"          :0.5,
-        "cutoutbox"         :25,
-        "cutmixpr"          :0.5,
-        "ssl_config"        :ssl_config_to_load,
-        "noclasses"         :1
-        }
-
-    else:
-        raise Exception('Invalid training type:', training_mode)
+ssl_pretrained:
+  mode: ssl_pretrained
+  sslmode_modelname: Dino
+  imnetpr: true
+  bsize: 8
+  epochs: 503
+  imsize: 256
+  lrate: 0.0001
+  aug: true
+  shuffle: true
+  sratio: 0.1
+  workers: 2
+  cutoutpr: 0.5
+  cutoutbox: 25
+  cutmixpr: 0.5
+  noclasses: 1

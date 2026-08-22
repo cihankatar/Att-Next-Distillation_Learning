@@ -56,20 +56,34 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
         foldernamepath="isic_2016_1/"
         imageext="/*.jpg"
         maskext="/*.png"
+    else:
+        raise ValueError(f"Unsupported dataset: {data}")
+
+    data_root = os.environ.get("ML_DATA_ROOT")
+    if not data_root:
+        raise EnvironmentError("ML_DATA_ROOT must point to the directory containing the datasets")
+    dataset_root = os.path.join(data_root, foldernamepath)
 
     if not mode == "ssl_pretrained":
 
         if op =="train":
 
             # Load full training paths
-            train_im_path   = os.environ["ML_DATA_ROOT"] + foldernamepath + "train/images"
-            train_mask_path = os.environ["ML_DATA_ROOT"] + foldernamepath + "train/masks"
+            train_im_path   = os.path.join(dataset_root, "train/images")
+            train_mask_path = os.path.join(dataset_root, "train/masks")
 
             train_im_path   = sorted(glob(train_im_path + imageext))
             train_mask_path = sorted(glob(train_mask_path + maskext))
 
             # Shuffle and split
+            if not train_im_path or len(train_im_path) != len(train_mask_path):
+                raise RuntimeError(
+                    f"Expected aligned training files for {data}, found "
+                    f"{len(train_im_path)} images and {len(train_mask_path)} masks"
+                )
             combined = list(zip(train_im_path, train_mask_path))
+            if not combined:
+                raise RuntimeError(f"No aligned training image/mask pairs found for {data}")
             random.seed(100)
             random.shuffle(combined)
 
@@ -79,14 +93,14 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
             train_im_path, train_mask_path = zip(*combined)
         
         elif op == "validation":
-            test_im_path    = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/images"
-            test_mask_path  = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/masks"
+            test_im_path    = os.path.join(dataset_root, "val/images")
+            test_mask_path  = os.path.join(dataset_root, "val/masks")
             test_im_path    = sorted(glob(test_im_path+imageext))
             test_mask_path  = sorted(glob(test_mask_path+maskext))
 
         else :
-            test_im_path    = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/images"
-            test_mask_path  = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/masks"
+            test_im_path    = os.path.join(dataset_root, "test/images")
+            test_mask_path  = os.path.join(dataset_root, "test/masks")
             test_im_path    = sorted(glob(test_im_path+imageext))
             test_mask_path  = sorted(glob(test_mask_path+maskext))
     
@@ -95,14 +109,21 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
         if op =="train":
 
             # Load full training paths
-            train_im_path   = os.environ["ML_DATA_ROOT"] + foldernamepath + "train/images"
-            train_mask_path = os.environ["ML_DATA_ROOT"] + foldernamepath + "train/masks"
+            train_im_path   = os.path.join(dataset_root, "train/images")
+            train_mask_path = os.path.join(dataset_root, "train/masks")
 
             train_im_path   = sorted(glob(train_im_path + imageext))
             train_mask_path = sorted(glob(train_mask_path + maskext))
 
             # Shuffle and split
+            if not train_im_path or len(train_im_path) != len(train_mask_path):
+                raise RuntimeError(
+                    f"Expected aligned training files for {data}, found "
+                    f"{len(train_im_path)} images and {len(train_mask_path)} masks"
+                )
             combined = list(zip(train_im_path, train_mask_path))
+            if not combined:
+                raise RuntimeError(f"No aligned training image/mask pairs found for {data}")
             random.seed(seed)
             random.shuffle(combined)
 
@@ -112,31 +133,47 @@ def loader(op,mode,sslmode,batch_size,num_workers,image_size,cutout_pr,cutout_bo
             train_im_path, train_mask_path = zip(*combined)
 
         elif op == "validation":
-            test_im_path    = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/images"
-            test_mask_path  = os.environ["ML_DATA_ROOT"]+foldernamepath+"val/masks"
+            test_im_path    = os.path.join(dataset_root, "val/images")
+            test_mask_path  = os.path.join(dataset_root, "val/masks")
             test_im_path    = sorted(glob(test_im_path+imageext))
             test_mask_path  = sorted(glob(test_mask_path+maskext))
 
         else :
-            test_im_path    = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/images"
-            test_mask_path  = os.environ["ML_DATA_ROOT"]+foldernamepath+"test/masks"
+            test_im_path    = os.path.join(dataset_root, "test/images")
+            test_mask_path  = os.path.join(dataset_root, "test/masks")
             test_im_path    = sorted(glob(test_im_path+imageext))
             test_mask_path  = sorted(glob(test_mask_path+maskext))
 
 
     transformations = data_transform(op,image_size)
 
-    if torch.cuda.is_available():
-        if op == "train":
-            data_train  = dataset(train_im_path,train_mask_path,cutout_pr,cutout_box, transformations,mode)
-        else:
-            data_test   = dataset(test_im_path, test_mask_path,cutout_pr,cutout_box, transformations,mode)
-
-    elif op == "train":  #train for debug in local
-        data_train  = dataset(train_im_path,train_mask_path,cutout_pr,cutout_box, transformations,mode)
-
-    else:  #test in local
-        data_test   = dataset(test_im_path, test_mask_path,cutout_pr,cutout_box, transformations,mode)
+    if op == "train":
+        if not train_im_path:
+            raise RuntimeError(
+                f"The selected split ratio produced an empty training subset for {data}"
+            )
+        data_train = dataset(
+            train_im_path,
+            train_mask_path,
+            cutout_pr,
+            cutout_box,
+            transformations,
+            mode,
+        )
+    else:
+        if not test_im_path or len(test_im_path) != len(test_mask_path):
+            raise RuntimeError(
+                f"Expected aligned image/mask files for {data}/{op}, "
+                f"found {len(test_im_path)} images and {len(test_mask_path)} masks"
+            )
+        data_test = dataset(
+            test_im_path,
+            test_mask_path,
+            cutout_pr,
+            cutout_box,
+            transformations,
+            mode,
+        )
 
     if op == "train":
         train_loader = DataLoader(

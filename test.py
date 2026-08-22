@@ -3,14 +3,30 @@ import wandb
 import os 
 import torchvision.transforms.functional as F
 from operator import add
-from tqdm import tqdm, trange
-from wandb_init  import *
-from visualization import *
-from utils.metrics import *
+from tqdm import tqdm
+from wandb_init import parser_init
+from utils.metrics import calculate_metrics
 #from data.data_loader import batch_random_walker_pseudo_mask
 from data.data_loader_ssl_pretrained import loader
-from augmentation.Augmentation import Cutout
-from models.Model import model_dice_bce
+from models.Model import ATTNext
+
+def update_res(res, **kwargs):
+    # string -> dict
+    res_clean = res.strip("[]")
+    items = res_clean.split(" ")
+    d = {}
+    for item in items:
+        key, val = item.split("=")
+        d[key] = val
+
+    # update values
+    for k, v in kwargs.items():
+        d[k] = str(v)
+
+    # dict -> string
+    new_res = "[" + " ".join([f"{k}={v}" for k, v in d.items()]) + "]"
+    return new_res
+
 
 def using_device():
     """Set and print the device used for training."""
@@ -29,13 +45,21 @@ def setup_paths(data):
         "isic_2016_1": "isic_2016_1/"
     }
     folder = folder_mapping.get(data)
-    base_path = os.environ["ML_DATA_OUTPUT"] if torch.cuda.is_available() else os.environ["ML_DATA_OUTPUT_LOCAL"]
+    if folder is None:
+        raise ValueError(f"Unsupported dataset: {data}")
+    output_key = "ML_DATA_OUTPUT" if torch.cuda.is_available() else "ML_DATA_OUTPUT_LOCAL"
+    base_path = os.environ.get(output_key) or os.environ.get("ML_DATA_OUTPUT")
+    if not base_path:
+        raise EnvironmentError(f"{output_key} must point to the checkpoint output directory")
     return os.path.join(base_path, folder)
 
     
 if __name__ == "__main__":
 
-    data, training_mode, op, dinowithsegloss,addtopoloss,seed = 'isic_2018_1', "ssl_pretrained", "train",True,False,932
+    data = os.environ.get("TOPODISTILL_DATASET", "isic_2018_1")
+    test_data = os.environ.get("TOPODISTILL_TEST_DATASET", "PH2Dataset")
+    seed = int(os.environ.get("TOPODISTILL_SEED", "932"))
+    training_mode, op, dinowithsegloss, addtopoloss = "supervised", "train", True, False
     device          = using_device()
     folder_path     = setup_paths(data)
 
@@ -48,16 +72,33 @@ if __name__ == "__main__":
     args.op             = "test"
 
     #config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
-    def create_loader(operation):
+    def create_loader(operation,data):
 
         return loader(operation,args.mode, args.sslmode_modelname, args.bsize, args.workers,args.imsize, args.cutoutpr, args.cutoutbox, args.shuffle, args.sratio, data,seed)
 
-    model     = model_dice_bce().to(device)
+    model     = ATTNext(args.mode).to(device)
+    # model_dino     = ATTNext(args.mode).to(device)
+    # model_supervised     = ATTNext(args.mode).to(device)
 
-    checkpoint_path = folder_path+str(model.__class__.__name__)+str(res)+f"_seed_{seed}"
+    res_dino = update_res(res, epochs=499)
+    res_supervised = update_res(res, epochs=450, mode="supervised")
+
+    checkpoint_path = os.environ.get("TOPODISTILL_MODEL_CHECKPOINT")
+    if not checkpoint_path:
+        checkpoint_path = folder_path+str(model.__class__.__name__)+str(res)+f"_seed_{seed}"
+    # checkpoint_path_dino = folder_path+str(model.__class__.__name__)+str(res_dino)#+f"_seed_{seed}"
+    # checkpoint_path_supervised = folder_path+str(model.__class__.__name__)+str(res_supervised)#+f"_seed_{seed}"
+
+    if not os.path.isfile(checkpoint_path):
+        raise FileNotFoundError(
+            f"Model checkpoint not found: {checkpoint_path}. "
+            "Set TOPODISTILL_MODEL_CHECKPOINT to override it."
+        )
     model.load_state_dict(torch.load(checkpoint_path, map_location=torch.device('cpu')))
-    
-    test_loader      = create_loader(args.op)
+    # model_dino.load_state_dict(torch.load(checkpoint_path_dino, map_location=torch.device('cpu')))
+    # model_supervised.load_state_dict(torch.load(checkpoint_path_supervised, map_location=torch.device('cpu')))
+
+    test_loader      = create_loader(args.op, data=test_data)
 
     print(f"model:",checkpoint_path)
     print('test_loader loader transform',test_loader.dataset.tr)
@@ -76,7 +117,13 @@ if __name__ == "__main__":
 
         with torch.no_grad():
             model_output = model(images)
-            prediction = torch.sigmoid(model_output)    
+            # model_output_dino = model_dino(images)
+            # model_output_supervised = model_supervised(images)
+
+            prediction = torch.sigmoid(model_output)
+            # prediction_dino = torch.sigmoid(model_output_dino)
+            # prediction_supervised = torch.sigmoid(model_output_supervised)
+
             score = calculate_metrics(labels.detach().cpu(), prediction.detach().cpu())
             metrics_score = list(map(add, metrics_score, score))
 

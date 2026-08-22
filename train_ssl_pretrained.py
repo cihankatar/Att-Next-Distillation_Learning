@@ -9,8 +9,7 @@ from utils.Loss_dino import Dice_CE_Loss
 from augmentation.Augmentation import Cutout, cutmix
 from wandb_init import parser_init, wandb_init
 from utils.metrics import calculate_metrics
-from models.Model import model_dice_bce
-from models.mednext.mednext2d import MedNeXtSegmentationModel
+from models.Model import ATTNext
 
 def using_device():
     """Set and print the device used for training."""
@@ -29,15 +28,24 @@ def setup_paths(data):
         "isic_2016_1": "isic_2016_1/"
     }
     folder = folder_mapping.get(data)
-    base_path = os.environ["ML_DATA_OUTPUT"] if torch.cuda.is_available() else os.environ["ML_DATA_OUTPUT_LOCAL"]
-    return os.path.join(base_path, folder)
+    if folder is None:
+        raise ValueError(f"Unsupported dataset: {data}")
+    output_key = "ML_DATA_OUTPUT" if torch.cuda.is_available() else "ML_DATA_OUTPUT_LOCAL"
+    base_path = os.environ.get(output_key) or os.environ.get("ML_DATA_OUTPUT")
+    if not base_path:
+        raise EnvironmentError(f"{output_key} must point to the checkpoint output directory")
+    folder_path = os.path.join(base_path, folder)
+    os.makedirs(folder_path, exist_ok=True)
+    return folder_path
 
 
 # Main Function
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op, dinowithsegloss,seed = 'isic_2018_1', "ssl_pretrained", "train",False, 932
+    data = os.environ.get("TOPODISTILL_DATASET", "isic_2018_1")
+    seed = int(os.environ.get("TOPODISTILL_SEED", "932"))
+    training_mode, op, dinowithsegloss = "ssl_pretrained", "train", False
 
     best_valid_loss   = float("inf")
     device      = using_device()
@@ -47,12 +55,9 @@ def main():
     res           = " ".join(res)
     res           = "["+res+"]"
     ssl_config    = " ".join(ssl_config)
-    ssl_config    = "["+ssl_config+"]"+ f"_segloss_{dinowithsegloss}_combinedloss_False"
+    ssl_config    = "[" + ssl_config + f"]_segloss_True_{data}"
 
-# Encoder[op=train mode=ssl sslmode_modelname=Dino imnetpr=False bsize=8 epochs=298 imsize=256 lrate=0.0001 aug=False shuffle=True sratio=None workers=2 cutoutpr=0.5 cutoutbox=None cutmixpr=0.5 noclasses=1]_segloss_True_mednext2d
-# Encoder[op=train mode=ssl sslmode_modelname=Dino imnetpr=False bsize=8 epochs=298 imsize=256 lrate=0.0001 aug=False shuffle=True sratio=None workers=2 cutoutpr=0.5 cutoutbox=None cutmixpr=0.5 noclasses=1]_segloss_True_Unet  
-    
-    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
+    config      = wandb_init(os.environ.get("WANDB_API_KEY"), os.environ.get("WANDB_DIR"), args, data, dinowithsegloss)
 
     # Data Loaders
     def create_loader(operation,seed):
@@ -63,10 +68,20 @@ def main():
     val_loader      = create_loader(args.op,seed)
     args.op         = "train"
 
-    model       = model_dice_bce(args.mode).to(device)
+    model       = ATTNext(args.mode).to(device)
     encoder     = model.encoder
 
-    checkpoint_path_ssl_read = folder_path+str(encoder.__class__.__name__)+str(ssl_config)
+    checkpoint_path_ssl_read = os.environ.get("TOPODISTILL_ENCODER_CHECKPOINT")
+    if not checkpoint_path_ssl_read:
+        checkpoint_path_ssl_read = os.path.join(
+            folder_path,
+            str(encoder.__class__.__name__) + str(ssl_config),
+        )
+    if not os.path.isfile(checkpoint_path_ssl_read):
+        raise FileNotFoundError(
+            "Pretrained encoder checkpoint not found: "
+            f"{checkpoint_path_ssl_read}. Set TOPODISTILL_ENCODER_CHECKPOINT to override it."
+        )
     encoder.load_state_dict(torch.load(checkpoint_path_ssl_read, map_location=torch.device('cpu')))
 
     checkpoint_path = folder_path+str(model.__class__.__name__)+str(res)+f"_seed_{seed}"
@@ -124,7 +139,6 @@ def main():
                     optimizer.zero_grad()
                     total_loss.backward()
                     optimizer.step()
-                    scheduler.step()
 
         if not training and num_batches > 0:
             val_metrics = [x / num_batches for x in metrics_sum]
@@ -139,6 +153,7 @@ def main():
 
         # Training
         train_loss, train_loss_, train_topo_loss = run_epoch(train_loader, training=True)
+        scheduler.step()
         wandb.log({"Train Loss": train_loss, "Train Dice Loss": train_loss_, "Train Topo Loss": train_topo_loss})
 
         # Validation

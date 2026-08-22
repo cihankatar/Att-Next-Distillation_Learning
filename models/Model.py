@@ -5,7 +5,6 @@ import torch.nn as nn
 from models.enc import encoder_function
 from models.dec import decoder_function
 import torch.nn.functional as F
-import time
 
 def device_f():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -141,7 +140,7 @@ class Bottleneck(nn.Module):
     
 #####   MODEL #####
     
-class model_dice_bce(nn.Module):
+class ATTNext(nn.Module):
     def __init__(self,training_mode="ssl"):
         super().__init__()
         
@@ -191,6 +190,11 @@ class model_dice_bce(nn.Module):
         return out
 
 
+# Backward compatibility for checkpoints/scripts created before the model was
+# renamed to ATTNext. New code should import ATTNext directly.
+model_dice_bce = ATTNext
+
+
 if __name__ == "__main__":
 
     #start=time.time()
@@ -204,7 +208,6 @@ if __name__ == "__main__":
     #end=time.time()
     
     #print(f'spending time :  {end-start}')
-
 
 
 

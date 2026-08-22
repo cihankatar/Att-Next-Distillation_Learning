@@ -1,25 +1,20 @@
 import os
+import argparse
 import numpy as np
 import cv2
 from PIL import Image
-import matplotlib.pyplot as plt 
-import torch    
-from skimage import measure, morphology as morph
+import torch
+from skimage import morphology as morph
 import torchvision.transforms as T
 from torch_topological.nn import CubicalComplex
 from torchvision.transforms.functional import to_pil_image
 from skimage.transform import resize
 from skimage import color
-from scipy import ndimage as ndi
 from utils.Dullrazor import dullrazor
-from utils.iou_dice import iou_and_dice
-from utils.Local_Variance import local_variance_
-from utils.PCA_channel import pca_channel,best_channel,NMF_channel
 from utils.Algorithms import morphological_chan_vese_segmentation, random_walker_pseudo_mask
-from utils.padding import adaptive_pad,upsample_patch_map,unpad_resize
+from utils.padding import adaptive_pad, unpad_resize
 from skimage.filters import threshold_otsu
-from custom_cubical_complexes import custom_cubical_complex 
-from plotting import plot
+from plotting import plot_topology_results
 
 def smart_h1_threshold(gray, birth, a, pers, steps=20):
 
@@ -144,11 +139,20 @@ def otsu_weight(channel):
     w1, w2 = len(fg)/len(channel.flatten()), len(bg)/len(channel.flatten())
     return w1 * w2 * (fg.mean() - bg.mean())**2
 
-def map(image_path, mask_path, idx,size=(256,256)):
+def generate_pseudo_mask(
+    image_path,
+    mask_path=None,
+    output_path=None,
+    index=0,
+    size=(256, 256),
+    show=False,
+):
 
     pil_img = Image.open(image_path).convert("RGB").resize(size)
-    real_mask = Image.open(mask_path).convert("L").resize(size)
-    real_mask = np.array(real_mask)
+    real_mask = None
+    if mask_path is not None:
+        real_mask = Image.open(mask_path).convert("L").resize(size)
+        real_mask = np.array(real_mask)
 
     # Convert to tensor (automatically scales 0–255 → 0–1 and makes shape [C,H,W])
     # Apply dullrazor (assuming it expects [C,H,W] tensor in float32, 0–1 range)
@@ -159,14 +163,12 @@ def map(image_path, mask_path, idx,size=(256,256)):
     
     clean_img = clean_img.permute(1, 2, 0).cpu().numpy()
 
-    # Convert back to RGB numpy (H,W,3), range 0–255
-    c_arr = (clean_img * 255).astype(np.uint8)
     arr = np.array(to_pil_image(clean_img).convert("L"))
 
     hsv = cv2.cvtColor(clean_img, cv2.COLOR_RGB2HSV)
     lab = color.rgb2lab(clean_img)
-    H, S, V = hsv[:,:,0], hsv[:,:,1], hsv[:,:,2]
-    L, A, B = lab[:,:,0], lab[:,:,1], lab[:,:,2]
+    S, V = hsv[:,:,1], hsv[:,:,2]
+    A, B = lab[:,:,1], lab[:,:,2]
     eps = 1e-8
     A_norm = (A - A.min()) / (A.max() - A.min() + eps)
     B_norm = (B - B.min()) / (B.max() - B.min() + eps)
@@ -193,58 +195,83 @@ def map(image_path, mask_path, idx,size=(256,256)):
         cc_mask, pi, _,_, bests, mask_holl,mask_h1,mask_ho, th = cubical_complex_segmentation(input_image, prcntg=5, persistence_threshold=1.0)
         cc_mask = unpad_resize(cc_mask, orig_shape=gray.shape, pad=pad_size, target_size=256)
         mask_h1 = unpad_resize(mask_h1, orig_shape=gray.shape, pad=pad_size, target_size=256)
-        print(f"--- Algoritma {name} için sonuçlar ---")
-        plot(name,img_input,random_walker_mask,morphological_mask,cc_mask,real_mask,img_tensor,clean_img,bests,otsu_mask,mask_holl,mask_h1,mask_ho,pi,th)
-        print("next", idx)
-        idx+=1
+        if output_path is not None:
+            Image.fromarray((cc_mask > 0).astype(np.uint8) * 255).save(output_path)
+
+        if show:
+            plot_topology_results(
+                name,
+                img_input,
+                random_walker_mask,
+                morphological_mask,
+                cc_mask,
+                real_mask,
+                img_tensor,
+                clean_img,
+                bests,
+                otsu_mask,
+                mask_holl,
+                mask_h1,
+                mask_ho,
+                pi,
+                th,
+            )
+        print("processed", index, image_path)
+        return cc_mask
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate persistent-homology pseudo-masks")
+    parser.add_argument(
+        "--dataset",
+        default=os.environ.get("TOPODISTILL_DATASET", "kvasir_1"),
+        help="dataset directory name under ML_DATA_ROOT",
+    )
+    parser.add_argument("--split", default="train", choices=("train", "val", "test"))
+    parser.add_argument("--start-index", type=int, default=1)
+    parser.add_argument("--limit", type=int)
+    parser.add_argument("--show", action="store_true", help="show diagnostic plots")
+    return parser.parse_args()
+
 
 def main():
-    dataset = "kvasir"  # Change dataset here if needed
-    main_path = os.path.join(os.environ["ML_DATA_ROOT"], dataset)
+    args = parse_args()
+    data_root = os.environ.get("ML_DATA_ROOT")
+    if not data_root:
+        raise EnvironmentError("ML_DATA_ROOT must point to the directory containing the datasets")
 
-    im_train_path    = os.path.join(main_path, "train/images")
-    masks_train_path = os.path.join(main_path, "train/masks")
+    split_path = os.path.join(data_root, args.dataset, args.split)
+    image_path = os.path.join(split_path, "images")
+    mask_path = os.path.join(split_path, "masks")
+    pseudo_mask_path = os.path.join(split_path, "pmasks")
+    os.makedirs(pseudo_mask_path, exist_ok=True)
 
-    images_list = [f for f in sorted(os.listdir(im_train_path)) if f.endswith(".jpg") or f.endswith(".png")]
-    masks_list = [f for f in sorted(os.listdir(masks_train_path)) if f.endswith(".jpg") or f.endswith(".png")]
-    idx=100
+    images = sorted(
+        name for name in os.listdir(image_path) if name.lower().endswith((".jpg", ".jpeg", ".png"))
+    )
+    masks = []
+    if os.path.isdir(mask_path):
+        masks = sorted(
+            name for name in os.listdir(mask_path) if name.lower().endswith((".jpg", ".jpeg", ".png"))
+        )
 
-    for i, (img_name, mask_name) in enumerate(zip(images_list[idx:], masks_list[idx:])):
-        print(f"[{i+1}/{len(images_list)}] Processing {img_name}")
-        img_path = os.path.join(im_train_path, img_name)
-        mask_path = os.path.join(masks_train_path, mask_name)
-        map(img_path, mask_path,idx)
-        idx+=1
+    selected = images[args.start_index :]
+    if args.limit is not None:
+        selected = selected[: args.limit]
+
+    for offset, image_name in enumerate(selected, start=args.start_index):
+        current_image = os.path.join(image_path, image_name)
+        current_mask = os.path.join(mask_path, masks[offset]) if offset < len(masks) else None
+        output_name = f"{os.path.splitext(image_name)[0]}.png"
+        output_file = os.path.join(pseudo_mask_path, output_name)
+        print(f"[{offset + 1}/{len(images)}] Processing {image_name}")
+        generate_pseudo_mask(
+            current_image,
+            current_mask,
+            output_file,
+            index=offset,
+            show=args.show,
+        )
 
 if __name__ == "__main__":
-    pcs = main()
-
-#174
-#165
-#178
-#191
-#1164, 1165, 1178 339 847 1122 372 506 809 808 1117 1724 1738 462 911 1292 188 1007  
-# 647 1728 246! 247! 165 lesyon kenarda
-# 1790 1074 1291 marking
-# 1119 belirsiz alan - kenarda
-# threshoulding
-# 952 ??
-#1191
-#172,182
-#1178 sonrası incele!!
-
-#196 730biyi çalışan örnek-- 603 138 142 1364 1267 1347 1356 1731 1015 126 132 
-
-#1731
-
-#119+8 problem +15 +19 +35!!   133 137 142 1598 210
-
-#339 sonrası 346!!
-#799
-#1731
-#220, 181!!!
-
-#172-----------  1234!!!!slope elbow sıkıntı 1135 1141
-
-#597 
-
+    main()

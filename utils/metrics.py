@@ -7,7 +7,8 @@ def IoU(y_true, y_pred):
     intersection = (y_true * y_pred).sum()
     union = (y_true).sum() + (y_pred).sum() - intersection
     
-    return torch.mean( (intersection + torch.tensor(1e-6)) / (union +  torch.tensor(1e-6)))
+    eps = torch.tensor(1e-6, device=y_true.device)
+    return torch.mean((intersection + eps) / (union + eps))
 
 def calculate_metrics(y_true, y_pred):
 
@@ -21,10 +22,10 @@ def calculate_metrics(y_true, y_pred):
     y_pred = y_pred.astype(np.uint8)
     y_pred = y_pred.reshape(-1)
 
-    score_jaccard   = jaccard_score(y_true, y_pred)
-    score_f1        = f1_score(y_true, y_pred)
-    score_recall    = recall_score(y_true, y_pred)
-    score_precision = precision_score(y_true, y_pred)
+    score_jaccard   = jaccard_score(y_true, y_pred, zero_division=0)
+    score_f1        = f1_score(y_true, y_pred, zero_division=0)
+    score_recall    = recall_score(y_true, y_pred, zero_division=0)
+    score_precision = precision_score(y_true, y_pred, zero_division=0)
     score_acc       = accuracy_score(y_true, y_pred)
     #score_IoU       = IoU(y_true, y_pred)
 

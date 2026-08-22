@@ -9,11 +9,8 @@ from utils.Loss_dino import Dice_CE_Loss
 from augmentation.Augmentation import Cutout, cutmix
 from wandb_init import parser_init, wandb_init
 from utils.metrics import calculate_metrics
-from models.Model import model_dice_bce
-import time
-import os, sys
-print("PYTHON:", sys.executable)
-print("ML_DATA_ROOT:", os.environ.get("ML_DATA_ROOT"))
+from models.Model import ATTNext
+
 def using_device():
     """Set and print the device used for training."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -31,15 +28,24 @@ def setup_paths(data):
         "isic_2016_1": "isic_2016_1/"
     }
     folder = folder_mapping.get(data)
-    base_path = os.environ["ML_DATA_OUTPUT"] if torch.cuda.is_available() else os.environ["ML_DATA_OUTPUT_LOCAL"]
-    return os.path.join(base_path, folder)
+    if folder is None:
+        raise ValueError(f"Unsupported dataset: {data}")
+    output_key = "ML_DATA_OUTPUT" if torch.cuda.is_available() else "ML_DATA_OUTPUT_LOCAL"
+    base_path = os.environ.get(output_key) or os.environ.get("ML_DATA_OUTPUT")
+    if not base_path:
+        raise EnvironmentError(f"{output_key} must point to the checkpoint output directory")
+    folder_path = os.path.join(base_path, folder)
+    os.makedirs(folder_path, exist_ok=True)
+    return folder_path
 
 
 # Main Function
 def main():
     # Configuration and Initial Setup
 
-    data, training_mode, op, dinowithsegloss,addtopoloss,seed = 'isic_2018_1', "supervised", "train",False,False,932
+    data = os.environ.get("TOPODISTILL_DATASET", "isic_2018_1")
+    seed = int(os.environ.get("TOPODISTILL_SEED", "932"))
+    training_mode, op, dinowithsegloss, addtopoloss = "supervised", "train", False, False
 
     best_valid_loss   = float("inf")
     device      = using_device()
@@ -49,7 +55,7 @@ def main():
     res           = " ".join(res)
     res           = "["+res+"]"
     
-    config      = wandb_init(os.environ["WANDB_API_KEY"], os.environ["WANDB_DIR"], args, data, dinowithsegloss)
+    config      = wandb_init(os.environ.get("WANDB_API_KEY"), os.environ.get("WANDB_DIR"), args, data, dinowithsegloss)
 
     # Data Loaders
     def create_loader(operation):
@@ -60,7 +66,7 @@ def main():
     val_loader      = create_loader(args.op)
     args.op         = "train"
 
-    model       = model_dice_bce(args.mode).to(device)
+    model       = ATTNext(args.mode).to(device)
 
     checkpoint_path = folder_path+str(model.__class__.__name__)+str(res)+f"_seed_{seed}"
     optimizer = Adam(model.parameters(), lr=config['learningrate'])
@@ -124,7 +130,6 @@ def main():
                     optimizer.zero_grad()
                     total_loss.backward()
                     optimizer.step()
-                    scheduler.step()
 
         if not training and num_batches > 0:
             val_metrics = [x / num_batches for x in metrics_sum]
@@ -139,6 +144,7 @@ def main():
 
         # Training
         train_loss, train_loss_, train_topo_loss = run_epoch(train_loader, training=True)
+        scheduler.step()
         wandb.log({"Train Loss": train_loss, "Train Dice Loss": train_loss_, "Train Topo Loss": train_topo_loss})
 
         # Validation
